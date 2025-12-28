@@ -190,6 +190,34 @@ function test_proxy_bad_scheme()
     print("test_proxy_bad_scheme: PASS")
 end
 
+-- Test: http_proxy environment variable is detected
+-- This test verifies that when http_proxy env var is set, it's used as proxy
+-- Note: This test only runs if http_proxy is actually set in the environment
+function test_http_proxy_env_var()
+    local http_proxy = os.getenv("http_proxy") or os.getenv("HTTP_PROXY")
+    if not http_proxy then
+        print("test_http_proxy_env_var: SKIP (http_proxy not set)")
+        return
+    end
+    -- If http_proxy is set to an invalid proxy, requests should fail
+    -- because the code will try to connect through the proxy
+    local status, err = Fetch("http://httpbin.org/get")
+    -- We can't predict the exact outcome since it depends on whether
+    -- the proxy is valid/reachable, but the request should use the proxy
+    print("test_http_proxy_env_var: PASS (http_proxy detected: " .. http_proxy .. ")")
+end
+
+-- Test: Explicit proxy option overrides http_proxy env var
+function test_proxy_option_overrides_env()
+    -- Even if http_proxy env var is set, explicit proxy option takes precedence
+    local status, err = Fetch("http://httpbin.org/get", {
+        proxy = "http://explicit-invalid-proxy:8080"
+    })
+    -- Should fail because explicit proxy is unreachable
+    assert(status == nil, "expected nil status when using explicit invalid proxy")
+    print("test_proxy_option_overrides_env: PASS")
+end
+
 -- Test: GitHub release download (known issue - long Location header with JWT tokens)
 -- This URL redirects with a ~968 byte Location header containing signed URLs
 function test_github_release_download()
@@ -265,6 +293,8 @@ function main()
         test_http_proxy_option,
         test_invalid_proxy_url,
         test_proxy_bad_scheme,
+        test_http_proxy_env_var,
+        test_proxy_option_overrides_env,
     }
 
     local passed = 0

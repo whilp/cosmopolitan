@@ -212,8 +212,17 @@ int LuaFetch(lua_State *L) {
 
   /*
    * Parse and validate proxy URL if specified.
+   * Check environment variables if no explicit proxy option given.
    */
-  if (proxyarg) {
+  if (!proxyarg) {
+    // Check http_proxy and HTTP_PROXY environment variables
+    proxyarg = getenv("http_proxy");
+    if (!proxyarg)
+      proxyarg = getenv("HTTP_PROXY");
+    if (proxyarg)
+      proxyarglen = strlen(proxyarg);
+  }
+  if (proxyarg && proxyarglen) {
     gc(ParseUrl(proxyarg, proxyarglen, &proxyurl, true));
     gc(proxyurl.params.p);
     // Proxy must use http:// scheme (not https, socks, etc.)
