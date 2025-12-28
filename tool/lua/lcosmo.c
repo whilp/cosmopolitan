@@ -225,5 +225,8 @@ int luaopen_cosmo(lua_State *L) {
   luaopen_lsqlite3(L);
   lua_setfield(L, -2, "sqlite3");
 
+  /* load help module (sets global help) */
+  luaL_dostring(L, "pcall(require, 'help')");
+
   return 1;
 }

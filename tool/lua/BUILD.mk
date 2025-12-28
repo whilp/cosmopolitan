@@ -74,11 +74,16 @@ TOOL_LUA_DEPS :=							\
 o/$(MODE)/tool/lua/lua.main.o: third_party/lua/lua.main.c
 	@$(COMPILE) -AOBJECTIFY.c $(OBJECTIFY.c) $(OUTPUT_OPTION) -DLUA_COSMO $<
 
+TOOL_LUA_ASSETS =							\
+	o/$(MODE)/tool/lua/help/init.lua.zip.o				\
+	o/$(MODE)/tool/lua/help/definitions.lua.zip.o
+
 o/$(MODE)/tool/lua/lua.dbg:						\
 		$(TOOL_LUA_DEPS)					\
 		$(TOOL_LUA_LUA_MODULES)					\
 		o/$(MODE)/tool/lua/lua.main.o				\
 		o/$(MODE)/tool/lua/.args.zip.o				\
+		$(TOOL_LUA_ASSETS)					\
 		$(CRT)							\
 		$(APE_NO_MODIFY_SELF)
 	@$(APELINK)
@@ -89,8 +94,13 @@ o/$(MODE)/tool/lua/test_cosmo.ok: o/$(MODE)/tool/lua/lua.dbg tool/lua/test_cosmo
 	$< tool/lua/test_cosmo.lua
 	@touch $@
 
+o/$(MODE)/tool/lua/test_help.ok: o/$(MODE)/tool/lua/lua.dbg tool/lua/test_help.lua
+	$< tool/lua/test_help.lua
+	@touch $@
+
 TOOL_LUA_TESTS =							\
-	o/$(MODE)/tool/lua/test_cosmo.ok
+	o/$(MODE)/tool/lua/test_cosmo.ok				\
+	o/$(MODE)/tool/lua/test_help.ok
 
 .PHONY: o/$(MODE)/tool/lua
 o/$(MODE)/tool/lua:							\

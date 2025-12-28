@@ -373,4 +373,13 @@ setmetatable(help, {
   end
 })
 
+-- Auto-register cosmo module if available
+local ok, cosmo = pcall(require, "cosmo")
+if ok and cosmo then
+  help.register(cosmo, "cosmo")
+end
+
+-- Install as global
+_G.help = help
+
 return help
