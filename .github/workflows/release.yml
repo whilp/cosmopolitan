@@ -50,7 +50,7 @@ jobs:
       - name: Create fat APE binaries
         run: |
           mkdir -p o/fat/bin
-          o/x86_64/tool/build/apelink \
+          o/x86_64/tool/build/apelink -s \
             -l o/x86_64/ape/ape.elf \
             -l o/aarch64/ape/ape.elf \
             -M ape/ape-m1.c \
@@ -58,7 +58,7 @@ jobs:
             o/x86_64/tool/lua/lua.dbg \
             o/aarch64/tool/lua/lua.dbg
           for bin in make zip unzip; do
-            o/x86_64/tool/build/apelink \
+            o/x86_64/tool/build/apelink -s \
               -l o/x86_64/ape/ape.elf \
               -l o/aarch64/ape/ape.elf \
               -M ape/ape-m1.c \

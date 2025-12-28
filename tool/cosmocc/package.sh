@@ -383,7 +383,7 @@ cp -f o/$ARM64/ape/ape.elf "$OUTDIR/bin/ape-aarch64.elf"
 for x in assimilate march-native mktemper fixupobj zipcopy apelink pecheck mkdeps zipobj \
          ar chmod cocmd cp echo gzip objbincopy package rm touch mkdir compile sha256sum \
          resymbol tlscc; do
-  $APE $APELINK \
+  $APE $APELINK -s \
     -l o/$AMD64/ape/ape.elf \
     -l o/$ARM64/ape/ape.elf \
     -M ape/ape-m1.c \
@@ -397,7 +397,7 @@ for x in ar chmod cp echo gzip package rm touch mkdir compile sha256sum; do
 done
 
 for x in make ctags; do
-  $APE $APELINK \
+  $APE $APELINK -s \
     -l o/$AMD64/ape/ape.elf \
     -l o/$ARM64/ape/ape.elf \
     -M ape/ape-m1.c \
