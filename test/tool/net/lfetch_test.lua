@@ -154,6 +154,42 @@ function test_bad_method()
     print("test_bad_method: PASS")
 end
 
+-- Test: HTTP proxy option is parsed
+-- This test verifies that the proxy option is accepted and used
+function test_http_proxy_option()
+    -- Use httpbin's /get endpoint which echoes request details
+    -- When using a proxy, the request should go through the proxy
+    -- For now, just test that the option doesn't cause an error
+    local status, headers, body = Fetch("http://httpbin.org/get", {
+        proxy = "http://invalid-proxy-for-testing:8080"
+    })
+    -- This should fail to connect to the proxy (proxy doesn't exist)
+    -- If proxy option is NOT implemented, this will succeed (direct connection)
+    -- If proxy option IS implemented, this will fail with connection error
+    assert(status == nil, "expected nil status when connecting through non-existent proxy, got: " .. tostring(status))
+    print("test_http_proxy_option: PASS")
+end
+
+-- Test: Invalid proxy URL
+function test_invalid_proxy_url()
+    local status, err = Fetch("http://httpbin.org/get", {
+        proxy = "not-a-valid-url"
+    })
+    assert(status == nil, "expected nil status for invalid proxy URL")
+    assert(err:find("proxy"), "expected proxy-related error, got: " .. tostring(err))
+    print("test_invalid_proxy_url: PASS")
+end
+
+-- Test: Proxy with unsupported scheme
+function test_proxy_bad_scheme()
+    local status, err = Fetch("http://httpbin.org/get", {
+        proxy = "socks5://proxy.example.com:1080"
+    })
+    assert(status == nil, "expected nil status for unsupported proxy scheme")
+    assert(err:find("proxy") or err:find("scheme"), "expected proxy scheme error, got: " .. tostring(err))
+    print("test_proxy_bad_scheme: PASS")
+end
+
 -- Test: GitHub release download (known issue - long Location header with JWT tokens)
 -- This URL redirects with a ~968 byte Location header containing signed URLs
 function test_github_release_download()
@@ -225,6 +261,10 @@ function main()
         test_ssrf_blocks_private,
         test_invalid_scheme,
         test_bad_method,
+        -- HTTP proxy tests
+        test_http_proxy_option,
+        test_invalid_proxy_url,
+        test_proxy_bad_scheme,
     }
 
     local passed = 0
