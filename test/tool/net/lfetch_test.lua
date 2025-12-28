@@ -695,7 +695,7 @@ function test_proxy_auth_long_jwt_password()
 
     assert(captured_request, "failed to capture request")
     local expected_auth = "Basic " .. base64_encode("container_id:" .. jwt_password)
-    assert(captured_request:find("Proxy%-Authorization:", 1, true),
+    assert(captured_request:find("Proxy-Authorization:", 1, true),
            "expected Proxy-Authorization header, got:\n" .. captured_request:sub(1, 500))
     -- Verify the full auth value is present
     assert(captured_request:find(expected_auth, 1, true),
@@ -771,7 +771,7 @@ function test_proxy_no_auth_no_header()
 
     assert(captured_request, "failed to capture request")
     -- Should NOT contain Proxy-Authorization header
-    assert(not captured_request:find("Proxy%-Authorization:", 1, true),
+    assert(not captured_request:find("Proxy-Authorization:", 1, true),
            "expected NO Proxy-Authorization header for unauthenticated proxy, got:\n" .. captured_request:sub(1, 500))
     print("test_proxy_no_auth_no_header: PASS")
 end
@@ -806,8 +806,10 @@ function test_proxy_auth_not_leaked_to_target()
 
     assert(captured_request, "failed to capture request")
     -- The proxy URL credentials should appear in Proxy-Authorization, NOT in Authorization
-    assert(not captured_request:find("Authorization: Basic", 1, true) or
-           captured_request:find("Proxy%-Authorization:", 1, true),
+    -- Check that there's no standalone "Authorization:" header (not Proxy-Authorization:)
+    local has_plain_auth = captured_request:find("\nAuthorization:", 1, true)
+    local has_proxy_auth = captured_request:find("Proxy-Authorization:", 1, true)
+    assert(not has_plain_auth or has_proxy_auth,
            "credentials should only appear in Proxy-Authorization, not Authorization")
     -- The raw credentials should not appear anywhere in the request
     assert(not captured_request:find("secretuser:secretpass", 1, true),
