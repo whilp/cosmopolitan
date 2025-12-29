@@ -5,7 +5,6 @@ local help = {
   _docs = {},           -- name -> {desc, params, returns, signature}
   _funcs = {},          -- function reference -> name
   _loaded = false,
-  _module_order = {},   -- track module discovery order
 }
 
 -- Parse a definitions.lua file and extract documentation
@@ -14,9 +13,7 @@ local function parse_definitions(content)
   local current_desc = {}
   local current_params = {}
   local current_returns = {}
-  local current_overloads = {}
   local in_multiline_comment = false
-  local multiline_buffer = {}
 
   for line in content:gmatch("[^\n]+") do
     -- Skip the meta marker and error line
@@ -65,14 +62,7 @@ local function parse_definitions(content)
       goto continue
     end
 
-    -- @overload annotation (store for reference)
-    local overload = line:match("^%-%-%-@overload%s+(.+)")
-    if overload then
-      table.insert(current_overloads, overload)
-      goto continue
-    end
-
-    -- Skip other annotations (@nodiscard, @class, etc)
+    -- Skip other annotations (@nodiscard, @class, @overload, etc)
     if line:match("^%-%-%-@") then
       goto continue
     end
@@ -88,7 +78,6 @@ local function parse_definitions(content)
         desc = table.concat(current_desc, "\n"),
         params = current_params,
         returns = current_returns,
-        overloads = current_overloads,
         signature = func_name .. "(" .. (params_str or "") .. ")"
       }
 
@@ -96,7 +85,6 @@ local function parse_definitions(content)
       current_desc = {}
       current_params = {}
       current_returns = {}
-      current_overloads = {}
     end
 
     -- Variable/constant declaration (for things like unix.O_RDONLY)
@@ -106,13 +94,11 @@ local function parse_definitions(content)
         desc = table.concat(current_desc, "\n"),
         params = {},
         returns = {},
-        overloads = {},
         signature = var_name
       }
       current_desc = {}
       current_params = {}
       current_returns = {}
-      current_overloads = {}
     end
 
     ::continue::
@@ -180,21 +166,10 @@ local function load_defs(modname)
   return parse_definitions(content)
 end
 
--- Load definitions from file(s)
+-- Load definitions
 local function load_definitions()
   if help._loaded then return end
-
-  -- Load base definitions (upstream redbean docs)
   help._docs = load_defs("definitions") or {}
-
-  -- Load override definitions (cosmo enhancements)
-  local overrides = load_defs("cosmo.help.definitions")
-  if overrides then
-    for name, doc in pairs(overrides) do
-      help._docs[name] = doc
-    end
-  end
-
   help._loaded = true
 end
 

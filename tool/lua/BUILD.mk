@@ -76,8 +76,7 @@ o/$(MODE)/tool/lua/lua.main.o: third_party/lua/lua.main.c
 
 TOOL_LUA_ASSETS =							\
 	o/$(MODE)/tool/lua/.lua/definitions.lua.zip.o			\
-	o/$(MODE)/tool/lua/.lua/cosmo/help/init.lua.zip.o		\
-	o/$(MODE)/tool/lua/.lua/cosmo/help/definitions.lua.zip.o
+	o/$(MODE)/tool/lua/.lua/cosmo/help/init.lua.zip.o
 
 # Strip tool/lua/ prefix so files end up at /zip/.lua/
 $(TOOL_LUA_ASSETS): private ZIPOBJ_FLAGS += -C2

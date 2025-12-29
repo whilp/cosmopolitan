@@ -60,8 +60,8 @@ for _, line in ipairs(output) do
 end
 assert(found_base64, "search results should include base64 functions")
 
--- Test 9: Check Fetch override includes proxy info
-local fetch_doc = help._docs["Fetch"] or help._docs["cosmo.Fetch"]
+-- Test 9: Check Fetch includes proxy info
+local fetch_doc = help._docs["Fetch"]
 assert(fetch_doc, "Fetch should be documented")
 assert(fetch_doc.desc:match("proxy") or fetch_doc.desc:match("Proxy"),
        "Fetch docs should mention proxy support")
