@@ -126,16 +126,64 @@ for prefix in pairs(modules) do
   end
 end
 
--- Test 7: Check for undocumented functions (warnings, not failures)
+-- Test 7: Track undocumented functions explicitly
+-- These are known gaps - test fails if new undocumented functions appear
 print()
 print("Test: Check for undocumented functions")
+
+local KNOWN_UNDOCUMENTED = {
+  -- Top-level functions
+  ["Compress"] = true,
+  ["Curve25519"] = true,
+  ["DecodeBase32"] = true,
+  ["EncodeBase32"] = true,
+  ["EscapeIp"] = true,
+  ["HasControlCodes"] = true,
+  ["HighwayHash64"] = true,
+  ["IsAcceptableHost"] = true,
+  ["IsAcceptablePort"] = true,
+  ["IsHeaderRepeatable"] = true,
+  ["IsValidHttpToken"] = true,
+  ["ParseHost"] = true,
+  ["ParseParams"] = true,
+  ["Uncompress"] = true,
+  -- argon2 module
+  ["argon2.hash_len"] = true,
+  ["argon2.m_cost"] = true,
+  ["argon2.parallelism"] = true,
+  ["argon2.t_cost"] = true,
+  ["argon2.variant"] = true,
+  -- sqlite3 module
+  ["sqlite3.config"] = true,
+  -- unix module
+  ["unix.S_ISBLK"] = true,
+  ["unix.S_ISCHR"] = true,
+  ["unix.S_ISDIR"] = true,
+  ["unix.S_ISFIFO"] = true,
+  ["unix.S_ISLNK"] = true,
+  ["unix.S_ISREG"] = true,
+  ["unix.S_ISSOCK"] = true,
+  ["unix.fstatfs"] = true,
+  ["unix.major"] = true,
+  ["unix.minor"] = true,
+  ["unix.setfsgid"] = true,
+  ["unix.sigpending"] = true,
+  ["unix.statfs"] = true,
+  ["unix.verynice"] = true,
+}
+
 local undocumented = {}
+local newly_documented = {}
 
 -- Check top-level functions
 for name, val in pairs(cosmo) do
   if type(val) == "function" then
     if not help._docs[name] then
-      table.insert(undocumented, "cosmo." .. name)
+      if not KNOWN_UNDOCUMENTED[name] then
+        table.insert(undocumented, name)
+      end
+    elseif KNOWN_UNDOCUMENTED[name] then
+      table.insert(newly_documented, name)
     end
   end
 end
@@ -149,22 +197,43 @@ for modname in pairs(EXPECTED_MODULES) do
       if type(val) == "function" and not name:match("^__") then
         local fullname = modname .. "." .. name
         if not help._docs[fullname] then
-          table.insert(undocumented, "cosmo." .. fullname)
+          if not KNOWN_UNDOCUMENTED[fullname] then
+            table.insert(undocumented, fullname)
+          end
+        elseif KNOWN_UNDOCUMENTED[fullname] then
+          table.insert(newly_documented, fullname)
         end
       end
     end
   end
 end
 
+-- Fail if new undocumented functions appear
 if #undocumented > 0 then
   table.sort(undocumented)
-  print("  WARNING: " .. #undocumented .. " undocumented functions found:")
+  print("  FAIL: " .. #undocumented .. " new undocumented functions found:")
   for _, name in ipairs(undocumented) do
     print("    - " .. name)
   end
+  print("  Add these to KNOWN_UNDOCUMENTED or add documentation")
+  failed = true
 else
-  print("  OK: all available functions are documented")
+  print("  OK: no new undocumented functions")
 end
+
+-- Report functions that are now documented (can be removed from KNOWN_UNDOCUMENTED)
+if #newly_documented > 0 then
+  table.sort(newly_documented)
+  print("  INFO: " .. #newly_documented .. " functions now documented (remove from KNOWN_UNDOCUMENTED):")
+  for _, name in ipairs(newly_documented) do
+    print("    - " .. name)
+  end
+end
+
+-- Count known undocumented
+local known_count = 0
+for _ in pairs(KNOWN_UNDOCUMENTED) do known_count = known_count + 1 end
+print("  INFO: " .. known_count .. " known undocumented functions tracked")
 
 -- Test 8: Check that sqlite3 docs exist (not lsqlite3)
 print()
