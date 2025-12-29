@@ -1,6 +1,5 @@
 -- test skill module
 
-local cosmo = require("cosmo")
 local skill = require("cosmo.skill")
 local unix = require("cosmo.unix")
 local path = require("cosmo.path")
@@ -9,8 +8,8 @@ assert(skill, "skill module should load")
 assert(type(skill.install) == "function", "skill.install should be a function")
 
 -- Test install to temp directory
-local suffix = cosmo.EncodeHex(cosmo.GetRandomBytes(3))
-local tmpdir = path.join(os.getenv("TMPDIR") or "/tmp", "lua_" .. suffix)
+local tmpdir = unix.mkdtemp(path.join(os.getenv("TMPDIR") or "/tmp", "lua_XXXXXX"))
+assert(tmpdir, "mkdtemp should work")
 local ok, err = skill.install(tmpdir .. "/")
 assert(ok, "skill.install failed: " .. (err or ""))
 
