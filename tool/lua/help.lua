@@ -26,20 +26,18 @@ local function is_available(name)
     return cosmo[parts[1]] ~= nil
   end
 
-  -- Module function (e.g., "unix.fork") or class method (e.g., "sqlite3.Database.close")
-  local current = cosmo[parts[1]]
-  if current == nil then return false end
+  -- Module function (e.g., "unix.fork") - require submodule directly
+  local sok, submod = pcall(require, "cosmo." .. parts[1])
+  if not sok or not submod then return false end
 
   -- For simple module.function, check if it exists
   if #parts == 2 then
-    -- Could be a function or a class table
-    return current[parts[2]] ~= nil
+    return submod[parts[2]] ~= nil
   end
 
-  -- For module.Class.method (e.g., sqlite3.Database.close), we trust that
+  -- For module.Class.method (e.g., lsqlite3.Database.close), we trust that
   -- if the module exists, its class methods are available. We can't easily
   -- check methods on userdata metatables without creating instances.
-  -- Just verify the module is available.
   return true
 end
 
@@ -478,6 +476,14 @@ local function ensure_registered()
     local ok, cosmo = pcall(require, "cosmo")
     if ok and cosmo then
       help.register(cosmo, "cosmo")
+      -- Register submodules (accessed via require("cosmo.xxx"))
+      local submodules = {"unix", "path", "re", "argon2", "lsqlite3"}
+      for _, name in ipairs(submodules) do
+        local sok, submod = pcall(require, "cosmo." .. name)
+        if sok and submod then
+          help.register(submod, "cosmo." .. name)
+        end
+      end
       help._registered = true
     end
   end

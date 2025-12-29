@@ -24,6 +24,13 @@ local KNOWN_UNDOCUMENTED = {
   ["unix.statfs"] = true, ["unix.verynice"] = true,
 }
 
+-- Load submodules via direct require
+local submodules = {}
+for modname in pairs(EXPECTED_MODULES) do
+  local ok, mod = pcall(require, "cosmo." .. modname)
+  if ok then submodules[modname] = mod end
+end
+
 local errors = {}
 
 -- Get documented module prefixes
@@ -43,14 +50,15 @@ for modname in pairs(EXPECTED_MODULES) do
   if not documented[modname] then
     table.insert(errors, "'" .. modname .. "' expected but not documented")
   end
-  if type(cosmo[modname]) ~= "table" then
-    table.insert(errors, "cosmo." .. modname .. " missing or not a table")
+  if not submodules[modname] then
+    table.insert(errors, "require('cosmo." .. modname .. "') failed")
   end
 end
 
 -- Check unavailable modules are filtered
 for _, modname in ipairs(UNAVAILABLE_MODULES) do
-  if cosmo[modname] == nil then
+  local ok = pcall(require, "cosmo." .. modname)
+  if not ok then
     for name in pairs(help._docs) do
       if name:match("^" .. modname .. "%.") then
         table.insert(errors, "'" .. modname .. "' unavailable but in help._docs")
@@ -67,15 +75,12 @@ for name, val in pairs(cosmo) do
     table.insert(undocumented, name)
   end
 end
-for modname in pairs(EXPECTED_MODULES) do
-  local mod = cosmo[modname]
-  if mod and type(mod) == "table" then
-    for name, val in pairs(mod) do
-      if type(val) == "function" and not name:match("^__") then
-        local fullname = modname .. "." .. name
-        if not help._docs[fullname] and not KNOWN_UNDOCUMENTED[fullname] then
-          table.insert(undocumented, fullname)
-        end
+for modname, mod in pairs(submodules) do
+  for name, val in pairs(mod) do
+    if type(val) == "function" and not name:match("^__") then
+      local fullname = modname .. "." .. name
+      if not help._docs[fullname] and not KNOWN_UNDOCUMENTED[fullname] then
+        table.insert(undocumented, fullname)
       end
     end
   end

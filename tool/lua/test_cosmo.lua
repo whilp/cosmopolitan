@@ -7,12 +7,12 @@ assert(type(cosmo.DecodeJson) == "function", "DecodeJson should be a function")
 assert(type(cosmo.EncodeJson) == "function", "EncodeJson should be a function")
 assert(type(cosmo.Sha256) == "function", "Sha256 should be a function")
 
--- test submodules exist
-assert(type(cosmo.unix) == "table", "cosmo.unix should be a table")
-assert(type(cosmo.path) == "table", "cosmo.path should be a table")
-assert(type(cosmo.re) == "table", "cosmo.re should be a table")
-assert(type(cosmo.argon2) == "table", "cosmo.argon2 should be a table")
-assert(type(cosmo.lsqlite3) == "table", "cosmo.lsqlite3 should be a table")
+-- test submodules via direct require
+assert(type(require("cosmo.unix")) == "table", "cosmo.unix should be a table")
+assert(type(require("cosmo.path")) == "table", "cosmo.path should be a table")
+assert(type(require("cosmo.re")) == "table", "cosmo.re should be a table")
+assert(type(require("cosmo.argon2")) == "table", "cosmo.argon2 should be a table")
+assert(type(require("cosmo.lsqlite3")) == "table", "cosmo.lsqlite3 should be a table")
 
 -- test a function actually works
 local json = cosmo.EncodeJson({foo = "bar"})

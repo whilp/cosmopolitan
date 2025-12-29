@@ -42,104 +42,106 @@ help("unix")     -- module functions
 
 ## Quick Reference
 
-All functions are accessed via `local cosmo = require("cosmo")`.
+Top-level functions: `local cosmo = require("cosmo")`
+Submodules: `local unix = require("cosmo.unix")`
 
 ### HTTP & Networking (replaces curl, luasocket)
 
 | Function | Purpose |
 |----------|---------|
-| `cosmo.Fetch(url)` | HTTP GET/POST with redirects, TLS, proxy support |
-| `cosmo.ResolveIp(host)` | DNS lookup |
-| `cosmo.ParseUrl(url)` | Parse URL into components |
-| `cosmo.FormatIp(ip)` | Format IP address |
-| `cosmo.IsPublicIp(ip)` | Check if IP is public |
+| `Fetch(url)` | HTTP GET/POST with redirects, TLS, proxy support |
+| `ResolveIp(host)` | DNS lookup |
+| `ParseUrl(url)` | Parse URL into components |
+| `FormatIp(ip)` | Format IP address |
+| `IsPublicIp(ip)` | Check if IP is public |
 
 ### JSON (replaces dkjson, cjson)
 
 | Function | Purpose |
 |----------|---------|
-| `cosmo.DecodeJson(str)` | Parse JSON string to Lua table |
-| `cosmo.EncodeJson(tbl)` | Encode Lua table to JSON string |
+| `DecodeJson(str)` | Parse JSON string to Lua table |
+| `EncodeJson(tbl)` | Encode Lua table to JSON string |
 
 ### Encoding & Hashing
 
 | Function | Purpose |
 |----------|---------|
-| `cosmo.EncodeBase64(s)` | Base64 encode |
-| `cosmo.DecodeBase64(s)` | Base64 decode |
-| `cosmo.EncodeHex(s)` | Hex encode |
-| `cosmo.DecodeHex(s)` | Hex decode |
-| `cosmo.Sha256(s)` | SHA-256 hash |
-| `cosmo.Sha1(s)` | SHA-1 hash |
-| `cosmo.Md5(s)` | MD5 hash |
-| `cosmo.GetRandomBytes(n)` | Cryptographic random bytes |
+| `EncodeBase64(s)` | Base64 encode |
+| `DecodeBase64(s)` | Base64 decode |
+| `EncodeHex(s)` | Hex encode |
+| `DecodeHex(s)` | Hex decode |
+| `Sha256(s)` | SHA-256 hash |
+| `Sha1(s)` | SHA-1 hash |
+| `Md5(s)` | MD5 hash |
+| `GetRandomBytes(n)` | Cryptographic random bytes |
 
 ### Compression
 
 | Function | Purpose |
 |----------|---------|
-| `cosmo.Deflate(s)` | Compress with zlib |
-| `cosmo.Inflate(s)` | Decompress zlib |
+| `Deflate(s)` | Compress with zlib |
+| `Inflate(s)` | Decompress zlib |
 
-### Path Utilities (replaces lfs path operations)
-
-| Function | Purpose |
-|----------|---------|
-| `cosmo.path.join(...)` | Join path components |
-| `cosmo.path.basename(p)` | Get filename from path |
-| `cosmo.path.dirname(p)` | Get directory from path |
-| `cosmo.path.exists(p)` | Check if path exists |
-| `cosmo.path.isfile(p)` | Check if path is file |
-| `cosmo.path.isdir(p)` | Check if path is directory |
-
-### POSIX/Unix (replaces luaposix)
+### Path Utilities: `require("cosmo.path")`
 
 | Function | Purpose |
 |----------|---------|
-| `cosmo.unix.open(path, flags)` | Open file descriptor |
-| `cosmo.unix.read(fd)` | Read from fd |
-| `cosmo.unix.write(fd, data)` | Write to fd |
-| `cosmo.unix.close(fd)` | Close fd |
-| `cosmo.unix.fork()` | Fork process |
-| `cosmo.unix.execve(prog, args)` | Execute program |
-| `cosmo.unix.stat(path)` | Get file metadata |
-| `cosmo.unix.environ()` | Get environment |
-| `cosmo.unix.getpid()` | Get process ID |
-| `cosmo.unix.sleep(secs)` | Sleep |
-| `cosmo.unix.clock_gettime()` | High-resolution time |
+| `path.join(...)` | Join path components |
+| `path.basename(p)` | Get filename from path |
+| `path.dirname(p)` | Get directory from path |
+| `path.exists(p)` | Check if path exists |
+| `path.isfile(p)` | Check if path is file |
+| `path.isdir(p)` | Check if path is directory |
+
+### POSIX/Unix: `require("cosmo.unix")`
+
+| Function | Purpose |
+|----------|---------|
+| `unix.open(path, flags)` | Open file descriptor |
+| `unix.read(fd)` | Read from fd |
+| `unix.write(fd, data)` | Write to fd |
+| `unix.close(fd)` | Close fd |
+| `unix.fork()` | Fork process |
+| `unix.execve(prog, args)` | Execute program |
+| `unix.stat(path)` | Get file metadata |
+| `unix.environ()` | Get environment |
+| `unix.getpid()` | Get process ID |
+| `unix.sleep(secs)` | Sleep |
+| `unix.clock_gettime()` | High-resolution time |
 
 See `help("unix")` for 100+ additional syscall wrappers.
 
-### Regular Expressions (replaces lrexlib, PCRE)
+### Regular Expressions: `require("cosmo.re")`
 
 | Function | Purpose |
 |----------|---------|
-| `cosmo.re.search(pattern, str)` | Search for pattern |
-| `cosmo.re.compile(pattern)` | Compile regex for reuse |
+| `re.search(pattern, str)` | Search for pattern |
+| `re.compile(pattern)` | Compile regex for reuse |
 | `regex:search(str)` | Search with compiled regex |
 
-### SQLite (lsqlite3)
+### SQLite: `require("cosmo.lsqlite3")`
 
 | Function | Purpose |
 |----------|---------|
-| `cosmo.lsqlite3.open(path)` | Open database |
-| `cosmo.lsqlite3.open_memory()` | Open in-memory database |
+| `sqlite.open(path)` | Open database |
+| `sqlite.open_memory()` | Open in-memory database |
 | `db:exec(sql)` | Execute SQL |
 | `db:prepare(sql)` | Prepare statement |
 | `stmt:step()` | Execute prepared statement |
 | `db:close()` | Close database |
 
-### Password Hashing
+### Password Hashing: `require("cosmo.argon2")`
 
 | Function | Purpose |
 |----------|---------|
-| `cosmo.argon2.hash_encoded(pw, salt)` | Hash password |
-| `cosmo.argon2.verify(encoded, pw)` | Verify password |
+| `argon2.hash_encoded(pw, salt)` | Hash password |
+| `argon2.verify(encoded, pw)` | Verify password |
 
 ## Example
 
 ```lua
 local cosmo = require("cosmo")
+local path = require("cosmo.path")
 
 -- Fetch JSON from an API
 local status, headers, body = cosmo.Fetch("https://api.example.com/data")
@@ -149,9 +151,9 @@ if status == 200 then
 end
 
 -- Work with files
-local path = cosmo.path.join(os.getenv("HOME"), ".config", "app.json")
-if cosmo.path.exists(path) then
-  local f = io.open(path)
+local configpath = path.join(os.getenv("HOME"), ".config", "app.json")
+if path.exists(configpath) then
+  local f = io.open(configpath)
   local config = cosmo.DecodeJson(f:read("*a"))
   f:close()
 end

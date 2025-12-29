@@ -214,30 +214,26 @@ int luaopen_cosmo(lua_State *L) {
 
   luaL_newlib(L, kCosmoFuncs);
 
-  /* add unix submodule */
+  /* register submodules for direct require("cosmo.xxx") */
   LuaUnix(L);
   register_submodule(L, "cosmo.unix");
-  lua_setfield(L, -2, "unix");
+  lua_pop(L, 1);
 
-  /* add path submodule */
   LuaPath(L);
   register_submodule(L, "cosmo.path");
-  lua_setfield(L, -2, "path");
+  lua_pop(L, 1);
 
-  /* add re submodule */
   LuaRe(L);
   register_submodule(L, "cosmo.re");
-  lua_setfield(L, -2, "re");
+  lua_pop(L, 1);
 
-  /* add argon2 submodule */
   luaopen_argon2(L);
   register_submodule(L, "cosmo.argon2");
-  lua_setfield(L, -2, "argon2");
+  lua_pop(L, 1);
 
-  /* add lsqlite3 submodule */
   luaopen_lsqlite3(L);
   register_submodule(L, "cosmo.lsqlite3");
-  lua_setfield(L, -2, "lsqlite3");
+  lua_pop(L, 1);
 
   /* make help() global for convenience */
   (void)luaL_dostring(L, "_G.help = require('cosmo.help')");
