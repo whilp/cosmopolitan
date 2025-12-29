@@ -162,7 +162,7 @@ end
 Use `help.search(keyword)` to find functions. The help system has complete documentation for all functions including parameters, return values, and examples.
 ]]
 
-local unix = require("cosmo").unix
+local unix = require("cosmo.unix")
 
 local function write_file(path, content)
   local dir = path:match("(.+)/[^/]+$")
