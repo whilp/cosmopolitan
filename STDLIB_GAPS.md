@@ -2,6 +2,32 @@
 
 Comparison of cosmo.* modules vs standard libraries in Python, Go, and Rust.
 
+## TL;DR: What's Already in the Repo
+
+**YES - Ready to Expose (just need Lua bindings):**
+1. ✅ **HTTP Server** - redbean.c (7317 lines) + greenbean.c (pthread example)
+2. ✅ **ZIP Archive** - third_party/zip + third_party/unzip (full read/write)
+3. ✅ **XML Parser** - third_party/python/Modules/expat (Expat XML parser)
+4. ✅ **HTML Parser** - third_party/tidy (45K lines, HTML Tidy)
+5. ✅ **CSV Parser** - third_party/python/Modules/_csv.c (3500 lines)
+6. ✅ **Advanced Crypto** - third_party/mbedtls (97 files: AES, RSA, TLS, X.509)
+7. ✅ **Threading** - Full pthread implementation (libc/thread/, 150+ files)
+8. ✅ **CLI Args** - third_party/getopt (GNU getopt_long)
+9. ✅ **Compression** - bzip2, lz4, zstd (beyond existing gzip/deflate)
+10. ✅ **DateTime** - strftime/strptime (libc/time + third_party/tz)
+
+**NO - Need to Implement:**
+- ❌ TAR archive (can port from Python's tarfile.py)
+- ❌ Template engine (Mustache in pure Lua)
+- ❌ SMTP client (pure Lua)
+- ❌ WebSockets (extend redbean or pure Lua)
+- ❌ INI/TOML/YAML parsers (pure Lua)
+- ❌ Testing framework (pure Lua)
+- ❌ Structured logging (pure Lua)
+- ❌ Async event loop (Lua coroutines + poll)
+
+**Bottom Line**: Most high-value features already exist in C and just need Lua bindings. The HTTP server (redbean) and ZIP support are particularly significant.
+
 ## Current Cosmo Modules
 
 ### Available (✓)
@@ -423,37 +449,103 @@ end)
 
 ## Existing Resources to Leverage
 
-### From This Repository
+### Already in Repository (Ready to Expose)
 
-1. **redbean.c** (7317 lines)
-   - HTTP/1.1 server with TLS
-   - Request parsing, routing, response handling
-   - ZIP filesystem, asset serving
-   - Worker process management
+#### 1. **HTTP Server** ✅
+- **redbean.c** (7317 lines) - Full HTTP/1.1 server with TLS, routing, asset serving
+- **greenbean.c** (example) - pthread-based threaded server alternative
+- **Action**: Extract into `cosmo.http` Lua module
 
-2. **greenbean.c** (example)
-   - pthread-based server
-   - Thread pool pattern
-   - Atomic operations
+#### 2. **ZIP Archive** ✅
+- **third_party/zip/** (~30 C files) - Full ZIP creation/compression
+- **third_party/unzip/** (~30 C files) - Full ZIP extraction
+- **libc/zip.h + libc/str/getzipfile*.c** - ZIP filesystem API
+- **Already used by redbean** for embedded assets
+- **Action**: Expose as `cosmo.zip` module (read/write/list)
 
-3. **tool/net/zip.c**
-   - ZIP reading/writing
-   - PKZIP format support
-   - Already integrated in redbean
+#### 3. **XML/HTML Parser** ✅
+- **third_party/python/Modules/expat/** (234KB xmlparse.c) - Expat XML parser
+- **third_party/tidy/** (45K lines total) - HTML Tidy parser/cleaner
+- **Action**: Wrap as `cosmo.xml` and `cosmo.html` modules
 
-4. **cosmopolitan libc crypto**
-   - MD5, SHA*, CRC32 (exposed)
-   - BoringSSL available (not exposed)
-   - Argon2 (exposed)
+#### 4. **CSV Parser** ✅
+- **third_party/python/Modules/_csv.c** (~3500 lines) - Full CSV reader/writer
+- **Action**: Extract Python module as `cosmo.csv` for Lua
 
-5. **libxml2** (in third_party)
-   - XML/HTML parsing
-   - XPath support
+#### 5. **Advanced Crypto (mbedtls)** ✅
+- **third_party/mbedtls/** (97 C files, comprehensive)
+  - AES, RSA, ECDH, ECDSA, ChaCha20, Poly1305
+  - TLS 1.2/1.3 client/server
+  - X.509 certificates, PEM/DER encoding
+  - HKDF, HMAC-DRBG, entropy
+- **Action**: Expose as `cosmo.crypto` (AES, RSA, TLS client)
 
-6. **Lua 5.4**
-   - Coroutines for async
-   - Full metatable/OOP support
-   - Fast JIT-friendly bytecode
+#### 6. **Threading (pthreads)** ✅
+- **Full pthread implementation** across libc/thread/ (~150 files)
+  - pthread_create, join, detach, cancel
+  - mutexes, rwlocks, barriers, spinlocks
+  - condition variables, semaphores
+  - Thread-local storage (pthread_key_create)
+- **Proven in greenbean.c** (uses pthread, atomic ops)
+- **Action**: Expose as `cosmo.thread` module
+
+#### 7. **CLI Argument Parser (getopt)** ✅
+- **third_party/getopt/** - GNU getopt_long implementation
+- **Action**: Wrap as `cosmo.argparse` or write pure Lua version
+
+#### 8. **TAR Archive** ⚠️
+- **third_party/python/Lib/tarfile.py** - Python tarfile module (pure Python)
+- **No C implementation found**
+- **Action**: Port Python version to Lua (~500 lines) or write from scratch
+
+#### 9. **Compression Algorithms** ✅
+- **Already exposed**: gzip, deflate, zlib (cosmo.Compress/Decompress)
+- **third_party/bzip2/** - bzip2 compression
+- **third_party/lz4cli/** - LZ4 compression
+- **third_party/zstd/** - Zstandard compression
+- **Action**: Expose additional formats (bzip2, lz4, zstd)
+
+#### 10. **Date/Time Parsing** ✅
+- **third_party/tz/** - Timezone database
+- **libc/time/** - strftime, strptime, gmtime, localtime
+- **Already exposed**: ParseHttpDateTime, FormatHttpDateTime
+- **Action**: Expose general datetime parsing as `cosmo.datetime`
+
+#### 11. **SMTP/Email** ❌
+- **Not found in repo**
+- **Action**: Implement pure Lua SMTP client (~600 lines)
+
+#### 12. **WebSockets** ❌
+- **Not found in repo**
+- **Action**: Extend redbean C code or use pure Lua implementation
+
+#### 13. **Testing Framework** ⚠️
+- **libc/testlib/** - C testing framework (testmain.c, etc.)
+- **third_party/lua/test/** - Lua test files (no framework)
+- **Action**: Create pure Lua testing framework (~400 lines)
+
+#### 14. **Logging** ⚠️
+- **cosmo.unix.syslog** - Already exposed
+- **No structured logging**
+- **Action**: Pure Lua structured logger (~200 lines)
+
+#### 15. **Template Engine** ❌
+- **Not found in repo**
+- **Action**: Pure Lua Mustache implementation (~500 lines)
+
+#### 16. **INI/TOML/YAML Parsers** ❌
+- **Not found in repo**
+- **Action**: Pure Lua parsers (200-400 lines each)
+
+#### 17. **Markdown Parser** ⚠️
+- **third_party might have cmark** - need to verify
+- **Action**: Wrap cmark if available, or pure Lua parser
+
+#### 18. **Async/Event Loop** ⚠️
+- **Lua coroutines** - Built into Lua 5.4
+- **cosmo.unix.poll** - Already exposed
+- **No event loop framework**
+- **Action**: Build event loop on coroutines + poll (~800 lines Lua)
 
 ### Pure Lua Libraries to Adapt
 
