@@ -1128,10 +1128,13 @@ function EvadeDragnetSurveillance(bool) end
 ---   fresh entropy after fork. Set to `false` when making many sequential
 ---   requests in the same process to improve performance.
 ---
---- For HTTPS requests, server certificates are verified by default using the
---- built-in certificate bundle. Use `ProgramSslFetchVerify(false)` to disable
---- verification (not recommended for production). SNI (Server Name Indication)
---- is sent automatically based on the hostname.
+--- For HTTPS requests, server certificates are verified by default. Certificates
+--- are loaded from system CA bundles (e.g., `/etc/ssl/certs/ca-certificates.crt`
+--- on Debian/Ubuntu, `/etc/ssl/cert.pem` on macOS/Alpine) supplemented by an
+--- embedded bundle. Use `SSL_CERT_FILE` env var to specify a custom CA bundle,
+--- or `SSL_NO_SYSTEM_CERTS=1` to use only embedded certs. Use
+--- `ProgramSslFetchVerify(false)` to disable verification (not recommended).
+--- SNI (Server Name Indication) is sent automatically based on the hostname.
 ---
 --- When the redirect is being followed, the same method and body values are being
 --- sent in all cases except when 303 status is returned. In that case the method
