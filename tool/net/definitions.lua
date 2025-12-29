@@ -1124,6 +1124,14 @@ function EvadeDragnetSurveillance(bool) end
 ---   `"http://user:pass@proxy:8080"`). Only `http://` scheme is supported.
 ---   If not specified, falls back to `http_proxy` or `HTTP_PROXY` environment
 ---   variables. HTTPS requests use CONNECT tunneling through the proxy.
+--- - `resettls` (default: `true`): resets TLS state before the request to ensure
+---   fresh entropy after fork. Set to `false` when making many sequential
+---   requests in the same process to improve performance.
+---
+--- For HTTPS requests, server certificates are verified by default using the
+--- built-in certificate bundle. Use `ProgramSslFetchVerify(false)` to disable
+--- verification (not recommended for production). SNI (Server Name Indication)
+--- is sent automatically based on the hostname.
 ---
 --- When the redirect is being followed, the same method and body values are being
 --- sent in all cases except when 303 status is returned. In that case the method
@@ -1131,10 +1139,10 @@ function EvadeDragnetSurveillance(bool) end
 --- that if these (method/body) values are provided as table fields, they will be
 --- modified in place.
 ---@param url string
----@param body? string|{ headers: table<string,string>, value: string, method: string, body: string, maxredirects: integer?, keepalive: boolean?, proxy: string? }
----@return integer status, table<string,string> headers, string body/
+---@param body? string|{ headers: table<string,string>, method: string, body: string, maxredirects: integer?, keepalive: boolean?, proxy: string?, resettls: boolean? }
+---@return integer status, table<string,string> headers, string body
 ---@nodiscard
----@overload fun(url:string, body?: string|{ headers: table<string,string>, value: string, method: string, body: string, maxredirects?: integer, keepalive: boolean?, proxy: string? }): nil, error: string
+---@overload fun(url:string, body?: string|{ headers: table<string,string>, method: string, body: string, maxredirects?: integer, keepalive: boolean?, proxy: string?, resettls: boolean? }): nil, error: string
 function Fetch(url, body) end
 
 --- Converts UNIX timestamp to an RFC1123 string that looks like this:
