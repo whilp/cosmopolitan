@@ -1,5 +1,5 @@
 -- skill module for cosmo lua
--- Generates and installs a Claude Code skill
+-- Installs a Claude Code skill
 
 local skill = {}
 
@@ -164,13 +164,11 @@ end
 Use `help.search(keyword)` to find functions. The help system has complete documentation for all functions including parameters, return values, and examples.
 ]]
 
--- Write a file, creating parent directories as needed
 local function write_file(path, content)
   local dir = path:match("(.+)/[^/]+$")
   if dir then
     os.execute('mkdir -p "' .. dir .. '"')
   end
-
   local f = io.open(path, "w")
   if not f then
     return nil, "failed to open file: " .. path
@@ -180,7 +178,6 @@ local function write_file(path, content)
   return true
 end
 
--- Get the default skill installation path
 local function default_path()
   local home = os.getenv("HOME")
   if not home then
@@ -189,23 +186,6 @@ local function default_path()
   return home .. "/.claude/skills"
 end
 
--- Generate docs (for test compatibility - returns empty modules now)
-function skill.generate_docs()
-  local help = require("cosmo.help")
-  help.load()
-
-  -- Discover module prefixes for test compatibility
-  local modules = {}
-  for name in pairs(help._docs) do
-    local prefix = name:match("^([^%.]+)%.") or ""
-    modules[prefix] = true
-  end
-
-  -- Return skill content as the only doc
-  return {["SKILL.md"] = SKILL_CONTENT}, modules
-end
-
--- Install skill to a directory
 function skill.install(path)
   if not path then
     local default, err = default_path()

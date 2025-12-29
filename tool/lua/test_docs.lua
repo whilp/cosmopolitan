@@ -1,7 +1,6 @@
 -- Tests for documentation accuracy
 local cosmo = require("cosmo")
 local help = require("cosmo.help")
-local skill = require("cosmo.skill")
 
 help.load()
 
@@ -84,15 +83,6 @@ end
 if #undocumented > 0 then
   table.sort(undocumented)
   table.insert(errors, "new undocumented: " .. table.concat(undocumented, ", "))
-end
-
--- Check skill generates SKILL.md
-local docs = skill.generate_docs()
-if not docs["SKILL.md"] then
-  table.insert(errors, "SKILL.md not generated")
-end
-if not docs["SKILL.md"]:match("sqlite3") then
-  table.insert(errors, "SKILL.md missing sqlite3 reference")
 end
 
 -- Result
