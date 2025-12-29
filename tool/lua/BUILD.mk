@@ -75,16 +75,15 @@ o/$(MODE)/tool/lua/lua.main.o: third_party/lua/lua.main.c
 	@$(COMPILE) -AOBJECTIFY.c $(OBJECTIFY.c) $(OUTPUT_OPTION) -DLUA_COSMO $<
 
 TOOL_LUA_ASSETS =							\
-	o/$(MODE)/tool/net/definitions.lua.zip.o			\
-	o/$(MODE)/tool/lua/cosmo/help/init.lua.zip.o			\
-	o/$(MODE)/tool/lua/cosmo/help/definitions.lua.zip.o
+	o/$(MODE)/tool/lua/.lua/definitions.lua.zip.o			\
+	o/$(MODE)/tool/lua/.lua/cosmo/help/init.lua.zip.o		\
+	o/$(MODE)/tool/lua/.lua/cosmo/help/definitions.lua.zip.o
 
-# Embed Lua files at .lua/ prefix for require() to find them
-o/$(MODE)/tool/net/definitions.lua.zip.o: private			\
-		ZIPOBJ_FLAGS += -P.lua
-o/$(MODE)/tool/lua/cosmo/help/init.lua.zip.o				\
-o/$(MODE)/tool/lua/cosmo/help/definitions.lua.zip.o: private		\
-		ZIPOBJ_FLAGS += -P.lua
+# Copy base definitions.lua to .lua/ for embedding
+tool/lua/.lua/definitions.lua: tool/net/definitions.lua
+	@cp $< $@
+
+o/$(MODE)/tool/lua/.lua/definitions.lua.zip.o: tool/lua/.lua/definitions.lua
 
 o/$(MODE)/tool/lua/lua.dbg:						\
 		$(TOOL_LUA_DEPS)					\
