@@ -86,13 +86,13 @@ if #undocumented > 0 then
   table.insert(errors, "new undocumented: " .. table.concat(undocumented, ", "))
 end
 
--- Check sqlite3 naming
+-- Check skill generates SKILL.md
 local docs = skill.generate_docs()
-if not docs["cosmo-sqlite3.md"] then
-  table.insert(errors, "cosmo-sqlite3.md not generated")
+if not docs["SKILL.md"] then
+  table.insert(errors, "SKILL.md not generated")
 end
-if docs["cosmo-lsqlite3.md"] then
-  table.insert(errors, "cosmo-lsqlite3.md should not exist")
+if not docs["SKILL.md"]:match("sqlite3") then
+  table.insert(errors, "SKILL.md missing sqlite3 reference")
 end
 
 -- Result
