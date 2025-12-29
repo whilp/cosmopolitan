@@ -373,13 +373,11 @@ setmetatable(help, {
   end
 })
 
--- Auto-register cosmo module if available
+-- Auto-register cosmo module when help is loaded
+-- (cosmo is already loaded since help is called via cosmo.help)
 local ok, cosmo = pcall(require, "cosmo")
 if ok and cosmo then
   help.register(cosmo, "cosmo")
 end
-
--- Install as global
-_G.help = help
 
 return help

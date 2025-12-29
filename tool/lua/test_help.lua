@@ -2,8 +2,16 @@
 
 local cosmo = require("cosmo")
 
--- Test 1: help module is loaded and global
-assert(type(help) == "table", "help should be a global table")
+-- Test 1: cosmo.help exists and is callable
+assert(type(cosmo.help) == "function" or type(cosmo.help) == "table",
+       "cosmo.help should exist")
+
+-- Trigger lazy load by calling help
+cosmo.help("cosmo")
+
+-- Now cosmo.help is the actual help module
+local help = cosmo.help
+assert(type(help) == "table", "after first call, cosmo.help should be the help table")
 assert(type(help.show) == "function", "help.show should be a function")
 assert(type(help.search) == "function", "help.search should be a function")
 assert(type(help.register) == "function", "help.register should be a function")
