@@ -131,6 +131,10 @@ o/$(MODE)/tool/lua/test_lz4.ok: o/$(MODE)/tool/lua/lua.dbg tool/lua/test_lz4.lua
 	$< tool/lua/test_lz4.lua
 	@touch $@
 
+o/$(MODE)/tool/lua/test_zip.ok: o/$(MODE)/tool/lua/lua.dbg tool/lua/test_zip.lua
+	$< tool/lua/test_zip.lua
+	@touch $@
+
 TOOL_LUA_TESTS =							\
 	o/$(MODE)/tool/lua/test_cosmo.ok				\
 	o/$(MODE)/tool/lua/test_help.ok					\
@@ -138,7 +142,8 @@ TOOL_LUA_TESTS =							\
 	o/$(MODE)/tool/lua/test_docs.ok					\
 	o/$(MODE)/tool/lua/test_getopt.ok				\
 	o/$(MODE)/tool/lua/test_lz4.ok					\
-	o/$(MODE)/tool/lua/test_strftime.ok
+	o/$(MODE)/tool/lua/test_strftime.ok				\
+	o/$(MODE)/tool/lua/test_zip.ok
 
 .PHONY: o/$(MODE)/tool/lua
 o/$(MODE)/tool/lua:							\
