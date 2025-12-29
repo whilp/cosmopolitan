@@ -97,17 +97,22 @@ Submodules: `local unix = require("cosmo.unix")`
 
 | Function | Purpose |
 |----------|---------|
-| `unix.open(path, flags, mode)` | Open fd (mode: `tonumber("644", 8)`) |
+| `unix.open(path, flags, mode)` | Open fd |
 | `unix.read(fd)` | Read from fd |
 | `unix.write(fd, data)` | Write to fd |
 | `unix.close(fd)` | Close fd |
+| `unix.chmod(path, mode)` | Change file mode |
+| `unix.mkdir(path, mode)` | Create directory |
+| `unix.makedirs(path, mode)` | Create directory tree |
+| `unix.stat(path)` | Get file metadata |
 | `unix.fork()` | Fork process |
 | `unix.execve(prog, args)` | Execute program |
-| `unix.stat(path)` | Get file metadata |
 | `unix.environ()` | Get environment |
 | `unix.getpid()` | Get process ID |
 | `unix.sleep(secs)` | Sleep |
 | `unix.clock_gettime()` | High-resolution time |
+
+**Octal modes**: Lua has no octal literals. Use `tonumber("755", 8)` for modes.
 
 See `help("unix")` for 100+ additional syscall wrappers.
 
