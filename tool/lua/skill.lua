@@ -25,21 +25,19 @@ chmod +x lua
 
 ## Getting Help
 
-The executable has built-in documentation. Use the help module interactively or in scripts:
+The executable has built-in documentation. `help` is a global function:
 
 ```bash
-# Interactive REPL
-./lua
-> local help = require("cosmo.help")
-> help()                      -- overview of all modules
-> help("Fetch")               -- docs for a function
-> help("unix")                -- list functions in a module
-> help.search("socket")       -- search by keyword
+./lua -e 'help("Fetch")'           # look up a function
+./lua -e 'help("unix")'            # list module functions
+./lua -e 'help.search("socket")'   # search by keyword
 ```
 
-```bash
-# One-liner to look up a function
-./lua -e 'require("cosmo.help")("Fetch")'
+In the REPL:
+```lua
+help()           -- overview of all modules
+help("Fetch")    -- function docs
+help("unix")     -- module functions
 ```
 
 ## Quick Reference
