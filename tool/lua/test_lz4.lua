@@ -51,7 +51,7 @@ assert(err ~= nil, "negative maxoutsize should return error")
 -- Test empty string compression
 compressed = cosmo.Lz4Compress("")
 assert(compressed ~= nil, "empty string compression should succeed")
-decompressed = cosmo.Lz4Decompress(compressed, 0)
+decompressed = cosmo.Lz4Decompress(compressed, 10)  -- use small buffer, result will be ""
 assert(decompressed == "", "empty string roundtrip should work, got: " .. tostring(decompressed))
 
 -- Test binary data

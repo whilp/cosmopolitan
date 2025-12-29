@@ -32,7 +32,8 @@ TOOL_LUA_LUA_MODULES =							\
 	o/$(MODE)/tool/net/lsqlite3.o					\
 	o/$(MODE)/tool/net/largon2.o					\
 	o/$(MODE)/tool/net/lfetch.o					\
-	o/$(MODE)/tool/net/lgetopt.o
+	o/$(MODE)/tool/net/lgetopt.o					\
+	o/$(MODE)/third_party/lz4cli/lz4.o
 
 TOOL_LUA_DIRECTDEPS =							\
 	DSP_SCALE							\
@@ -59,7 +60,6 @@ TOOL_LUA_DIRECTDEPS =							\
 	THIRD_PARTY_GDTOA						\
 	THIRD_PARTY_GETOPT						\
 	THIRD_PARTY_LINENOISE						\
-	THIRD_PARTY_LZ4CLI						\
 	THIRD_PARTY_LUA							\
 	THIRD_PARTY_LUA_UNIX						\
 	THIRD_PARTY_MBEDTLS						\
