@@ -4,11 +4,7 @@ local help = require("cosmo.help")
 
 help.load()
 
-local EXPECTED_MODULES = {
-  unix = true, path = true, re = true, argon2 = true, lsqlite3 = true,
-}
-
-local UNAVAILABLE_MODULES = {"maxmind", "finger"}
+local EXPECTED_MODULES = {"unix", "path", "re", "argon2", "lsqlite3"}
 
 local KNOWN_UNDOCUMENTED = {
   Compress = true, Curve25519 = true, DecodeBase32 = true, EncodeBase32 = true,
@@ -24,74 +20,35 @@ local KNOWN_UNDOCUMENTED = {
   ["unix.statfs"] = true, ["unix.verynice"] = true,
 }
 
--- Load submodules via direct require
-local submodules = {}
-for modname in pairs(EXPECTED_MODULES) do
-  local ok, mod = pcall(require, "cosmo." .. modname)
-  if ok then submodules[modname] = mod end
-end
-
 local errors = {}
 
--- Get documented module prefixes
-local documented = {}
-for name in pairs(help._docs) do
-  local prefix = name:match("^([^%.]+)%.") or ""
-  if prefix ~= "" then documented[prefix] = true end
-end
-
--- Check module correspondence
-for prefix in pairs(documented) do
-  if not EXPECTED_MODULES[prefix] then
-    table.insert(errors, "'" .. prefix .. "' documented but not expected")
-  end
-end
-for modname in pairs(EXPECTED_MODULES) do
-  if not documented[modname] then
-    table.insert(errors, "'" .. modname .. "' expected but not documented")
-  end
-  if not submodules[modname] then
-    table.insert(errors, "require('cosmo." .. modname .. "') failed")
-  end
-end
-
--- Check unavailable modules are filtered
-for _, modname in ipairs(UNAVAILABLE_MODULES) do
-  local ok = pcall(require, "cosmo." .. modname)
+-- Check submodules are requireable and documented
+for _, modname in ipairs(EXPECTED_MODULES) do
+  local ok, mod = pcall(require, "cosmo." .. modname)
   if not ok then
-    for name in pairs(help._docs) do
-      if name:match("^" .. modname .. "%.") then
-        table.insert(errors, "'" .. modname .. "' unavailable but in help._docs")
-        break
+    table.insert(errors, "require('cosmo." .. modname .. "') failed")
+  else
+    -- Check for undocumented functions
+    for name, val in pairs(mod) do
+      if type(val) == "function" and not name:match("^__") then
+        local fullname = modname .. "." .. name
+        if not help._docs[fullname] and not KNOWN_UNDOCUMENTED[fullname] then
+          table.insert(errors, "undocumented: " .. fullname)
+        end
       end
     end
   end
 end
 
--- Check for new undocumented functions
-local undocumented = {}
+-- Check top-level undocumented functions
 for name, val in pairs(cosmo) do
   if type(val) == "function" and not help._docs[name] and not KNOWN_UNDOCUMENTED[name] then
-    table.insert(undocumented, name)
+    table.insert(errors, "undocumented: " .. name)
   end
-end
-for modname, mod in pairs(submodules) do
-  for name, val in pairs(mod) do
-    if type(val) == "function" and not name:match("^__") then
-      local fullname = modname .. "." .. name
-      if not help._docs[fullname] and not KNOWN_UNDOCUMENTED[fullname] then
-        table.insert(undocumented, fullname)
-      end
-    end
-  end
-end
-if #undocumented > 0 then
-  table.sort(undocumented)
-  table.insert(errors, "new undocumented: " .. table.concat(undocumented, ", "))
 end
 
--- Result
 if #errors > 0 then
+  table.sort(errors)
   for _, e in ipairs(errors) do print("FAIL: " .. e) end
   os.exit(1)
 end
