@@ -79,6 +79,13 @@ TOOL_LUA_ASSETS =							\
 	o/$(MODE)/tool/lua/cosmo/help/init.lua.zip.o			\
 	o/$(MODE)/tool/lua/cosmo/help/definitions.lua.zip.o
 
+# Embed Lua files at .lua/ prefix for require() to find them
+o/$(MODE)/tool/net/definitions.lua.zip.o: private			\
+		ZIPOBJ_FLAGS += -P.lua
+o/$(MODE)/tool/lua/cosmo/help/init.lua.zip.o				\
+o/$(MODE)/tool/lua/cosmo/help/definitions.lua.zip.o: private		\
+		ZIPOBJ_FLAGS += -P.lua
+
 o/$(MODE)/tool/lua/lua.dbg:						\
 		$(TOOL_LUA_DEPS)					\
 		$(TOOL_LUA_LUA_MODULES)					\

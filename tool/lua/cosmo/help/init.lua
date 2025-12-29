@@ -169,35 +169,27 @@ local function format_doc(name, doc)
   return table.concat(lines, "\n")
 end
 
+-- Load and parse a definitions file by module name
+local function load_defs(modname)
+  local path = package.searchpath(modname, package.path)
+  if not path then return nil end
+  local f = io.open(path, "r")
+  if not f then return nil end
+  local content = f:read("*a")
+  f:close()
+  return parse_definitions(content)
+end
+
 -- Load definitions from file(s)
 local function load_definitions()
   if help._loaded then return end
 
-  local function try_open(paths)
-    for _, path in ipairs(paths) do
-      local f = io.open(path, "r")
-      if f then return f end
-    end
-  end
-
   -- Load base definitions (upstream redbean docs)
-  local f = try_open({
-    "/zip/.lua/definitions.lua",
-    "tool/net/definitions.lua",
-  })
-  if f then
-    help._docs = parse_definitions(f:read("*a"))
-    f:close()
-  end
+  help._docs = load_defs("definitions") or {}
 
   -- Load override definitions (cosmo enhancements)
-  f = try_open({
-    "/zip/cosmo/help/definitions.lua",
-    "tool/lua/cosmo/help/definitions.lua",
-  })
-  if f then
-    local overrides = parse_definitions(f:read("*a"))
-    f:close()
+  local overrides = load_defs("cosmo.help.definitions")
+  if overrides then
     for name, doc in pairs(overrides) do
       help._docs[name] = doc
     end
