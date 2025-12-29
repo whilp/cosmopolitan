@@ -67,11 +67,23 @@ local function parse_definitions(content)
       goto continue
     end
 
-    -- Function declaration
+    -- Function declaration (supports both function Name.method() and function Name:method())
     local func_name = line:match("^function%s+([%w_%.]+)%s*%(")
+    local method_name = nil
+    if not func_name then
+      -- Try method syntax: function Class:method()
+      local class_name, meth_name = line:match("^function%s+([%w_%.]+):([%w_]+)%s*%(")
+      if class_name and meth_name then
+        func_name = class_name .. "." .. meth_name
+        method_name = meth_name
+      end
+    end
     if func_name then
       -- Extract parameter list from the line
-      local params_str = line:match("^function%s+[%w_%.]+%s*%(([^)]*)%)")
+      local params_str = line:match("^function%s+[%w_%.]+[%.:][%w_]*%s*%(([^)]*)%)")
+      if not params_str then
+        params_str = line:match("^function%s+[%w_%.]+%s*%(([^)]*)%)")
+      end
 
       -- Build the documentation entry
       docs[func_name] = {
