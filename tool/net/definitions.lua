@@ -3769,6 +3769,9 @@ function re.compile(regex, flags) end
 ---
 --- This wraps the standard GNU getopt_long(3) function for parsing command-line
 --- options with both short (-h) and long (--help) option support.
+---
+--- NOTE: This module uses global getopt state and is NOT thread-safe.
+--- Do not call from multiple threads or coroutines concurrently.
 getopt = {}
 
 --- Parse command-line arguments using getopt_long.
@@ -3785,7 +3788,7 @@ getopt = {}
 ---
 --- Example:
 ---
----     local opts, args = getopt.parse(arg, "hvo:", {
+---     local opts, args, unknown = getopt.parse(arg, "hvo:", {
 ---       {"help",    "none",     "h"},
 ---       {"verbose", "none",     "v"},
 ---       {"output",  "required", "o"},
@@ -3793,12 +3796,14 @@ getopt = {}
 ---     -- opts.h, opts.help = true if -h or --help was passed
 ---     -- opts.o, opts.output = "file.txt" if -o file.txt or --output=file.txt
 ---     -- args contains remaining non-option arguments
+---     -- unknown contains any unrecognized options
 ---
 ---@param args string[] Command-line arguments (typically `arg`)
 ---@param optstring string Short options string (e.g., "hvo:")
 ---@param longopts? table[] Long option definitions: {{name, has_arg, short}, ...}
 ---@return table opts Parsed options with both short and long names as keys
 ---@return string[] remaining Non-option arguments
+---@return string[] unknown Unrecognized options encountered during parsing
 function getopt.parse(args, optstring, longopts) end
 
 --- The path module may be used to manipulate unix paths.
