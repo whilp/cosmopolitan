@@ -97,7 +97,7 @@ Submodules: `local unix = require("cosmo.unix")`
 
 | Function | Purpose |
 |----------|---------|
-| `unix.open(path, flags)` | Open file descriptor |
+| `unix.open(path, flags, mode)` | Open fd (mode: `tonumber("644", 8)`) |
 | `unix.read(fd)` | Read from fd |
 | `unix.write(fd, data)` | Write to fd |
 | `unix.close(fd)` | Close fd |
@@ -169,12 +169,12 @@ local unix = require("cosmo.unix")
 local function write_file(path, content)
   local dir = path:match("(.+)/[^/]+$")
   if dir then
-    local ok, err = unix.makedirs(dir, 0755)
+    local ok, err = unix.makedirs(dir, tonumber("755", 8))
     if not ok and err:errno() ~= unix.EEXIST then
       return nil, "makedirs failed: " .. tostring(err)
     end
   end
-  local fd, err = unix.open(path, unix.O_WRONLY | unix.O_CREAT | unix.O_TRUNC, 0644)
+  local fd, err = unix.open(path, unix.O_WRONLY | unix.O_CREAT | unix.O_TRUNC, tonumber("644", 8))
   if not fd then
     return nil, "failed to open file: " .. tostring(err)
   end
