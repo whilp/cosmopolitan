@@ -1120,6 +1120,10 @@ function EvadeDragnetSurveillance(bool) end
 ---   If the table includes the `close` field set to a true value,
 ---   then the connection is closed after the request is made and the
 ---   host is removed from the mapping table.
+--- - `proxy`: HTTP proxy URL (e.g., `"http://proxy:8080"` or
+---   `"http://user:pass@proxy:8080"`). Only `http://` scheme is supported.
+---   If not specified, falls back to `http_proxy` or `HTTP_PROXY` environment
+---   variables. HTTPS requests use CONNECT tunneling through the proxy.
 ---
 --- When the redirect is being followed, the same method and body values are being
 --- sent in all cases except when 303 status is returned. In that case the method
@@ -1127,10 +1131,10 @@ function EvadeDragnetSurveillance(bool) end
 --- that if these (method/body) values are provided as table fields, they will be
 --- modified in place.
 ---@param url string
----@param body? string|{ headers: table<string,string>, value: string, method: string, body: string, maxredirects: integer?, keepalive: boolean? }
+---@param body? string|{ headers: table<string,string>, value: string, method: string, body: string, maxredirects: integer?, keepalive: boolean?, proxy: string? }
 ---@return integer status, table<string,string> headers, string body/
 ---@nodiscard
----@overload fun(url:string, body?: string|{ headers: table<string,string>, value: string, method: string, body: string, maxredirects?: integer, keepalive: boolean? }): nil, error: string
+---@overload fun(url:string, body?: string|{ headers: table<string,string>, value: string, method: string, body: string, maxredirects?: integer, keepalive: boolean?, proxy: string? }): nil, error: string
 function Fetch(url, body) end
 
 --- Converts UNIX timestamp to an RFC1123 string that looks like this:

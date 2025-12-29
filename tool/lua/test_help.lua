@@ -60,11 +60,11 @@ for _, line in ipairs(output) do
 end
 assert(found_base64, "search results should include base64 functions")
 
--- Test 9: Check Fetch is documented
+-- Test 9: Check Fetch includes proxy info
 local fetch_doc = help._docs["Fetch"]
 assert(fetch_doc, "Fetch should be documented")
-assert(fetch_doc.desc:match("HTTP") or fetch_doc.desc:match("request"),
-       "Fetch docs should describe HTTP requests")
+assert(fetch_doc.desc:match("proxy") or fetch_doc.desc:match("Proxy"),
+       "Fetch docs should mention proxy support")
 
 -- Test 10: Check unix module has many functions documented
 local unix_count = 0
