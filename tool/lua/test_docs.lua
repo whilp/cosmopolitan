@@ -5,7 +5,7 @@ local help = require("cosmo.help")
 help.load()
 
 local EXPECTED_MODULES = {
-  unix = true, path = true, re = true, argon2 = true, sqlite3 = true,
+  unix = true, path = true, re = true, argon2 = true, lsqlite3 = true,
 }
 
 local UNAVAILABLE_MODULES = {"maxmind", "finger"}
@@ -16,7 +16,7 @@ local KNOWN_UNDOCUMENTED = {
   IsAcceptableHost = true, IsAcceptablePort = true, IsHeaderRepeatable = true,
   IsValidHttpToken = true, ParseHost = true, ParseParams = true, Uncompress = true,
   ["argon2.hash_len"] = true, ["argon2.m_cost"] = true, ["argon2.parallelism"] = true,
-  ["argon2.t_cost"] = true, ["argon2.variant"] = true, ["sqlite3.config"] = true,
+  ["argon2.t_cost"] = true, ["argon2.variant"] = true, ["lsqlite3.config"] = true,
   ["unix.S_ISBLK"] = true, ["unix.S_ISCHR"] = true, ["unix.S_ISDIR"] = true,
   ["unix.S_ISFIFO"] = true, ["unix.S_ISLNK"] = true, ["unix.S_ISREG"] = true,
   ["unix.S_ISSOCK"] = true, ["unix.fstatfs"] = true, ["unix.major"] = true,

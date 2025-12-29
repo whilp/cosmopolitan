@@ -221,9 +221,9 @@ int luaopen_cosmo(lua_State *L) {
   luaopen_argon2(L);
   lua_setfield(L, -2, "argon2");
 
-  /* add sqlite3 submodule */
+  /* add lsqlite3 submodule */
   luaopen_lsqlite3(L);
-  lua_setfield(L, -2, "sqlite3");
+  lua_setfield(L, -2, "lsqlite3");
 
   /* make help() global for convenience */
   (void)luaL_dostring(L, "_G.help = require('cosmo.help')");

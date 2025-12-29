@@ -215,18 +215,11 @@ local function load_defs(modname)
 end
 
 -- Translate documentation names from upstream conventions to cosmo conventions
--- e.g., lsqlite3.open -> sqlite3.open, Database.close -> sqlite3.Database.close
+-- e.g., Database.close -> lsqlite3.Database.close
 local function translate_name(name)
-  -- lsqlite3 -> sqlite3 (cosmo exposes it as cosmo.sqlite3)
-  if name:match("^lsqlite3%.") then
-    return name:gsub("^lsqlite3%.", "sqlite3.")
-  end
-  if name == "lsqlite3" then
-    return "sqlite3"
-  end
-  -- Standalone class names belong to sqlite3
+  -- Standalone class names belong to lsqlite3
   if name:match("^Database%.") or name:match("^Context%.") or name:match("^VM%.") then
-    return "sqlite3." .. name
+    return "lsqlite3." .. name
   end
   return name
 end
@@ -327,12 +320,12 @@ function help.show(what)
 Cosmo Lua Help System
 
 Modules:
-  cosmo         - Encoding, hashing, compression, networking
-  cosmo.unix    - POSIX system calls
-  cosmo.path    - Path manipulation
-  cosmo.re      - Regular expressions
-  cosmo.sqlite3 - SQLite database
-  cosmo.argon2  - Password hashing
+  cosmo           - Encoding, hashing, compression, networking
+  cosmo.unix      - POSIX system calls
+  cosmo.path      - Path manipulation
+  cosmo.re        - Regular expressions
+  cosmo.lsqlite3  - SQLite database
+  cosmo.argon2    - Password hashing
 
 Usage:
   help("cosmo")              - List module contents
@@ -399,6 +392,40 @@ Usage:
     return false
   end
 
+  -- Special case: "cosmo" lists top-level functions (no dot in name)
+  if name == "cosmo" then
+    local items = {}
+    local submodules = {}
+    for dname, doc in pairs(help._docs) do
+      if not dname:match("%.") then
+        table.insert(items, {name = dname, signature = doc.signature})
+      else
+        local submod = dname:match("^([^%.]+)")
+        if submod then submodules[submod] = true end
+      end
+    end
+    table.sort(items, function(a, b) return a.name < b.name end)
+    local lines = {"cosmo", ""}
+    local submods = {}
+    for submod in pairs(submodules) do table.insert(submods, submod) end
+    if #submods > 0 then
+      table.sort(submods)
+      table.insert(lines, "Submodules:")
+      for _, submod in ipairs(submods) do
+        table.insert(lines, "  " .. submod)
+      end
+      table.insert(lines, "")
+    end
+    if #items > 0 then
+      table.insert(lines, "Functions:")
+      for _, item in ipairs(items) do
+        table.insert(lines, "  " .. item.signature)
+      end
+    end
+    print(table.concat(lines, "\n"))
+    return
+  end
+
   if is_module_prefix(name) then
     print(list_module(name))
     return
@@ -445,11 +472,28 @@ setmetatable(help, {
   end
 })
 
--- Auto-register cosmo module when help is loaded
--- (cosmo is already loaded since help is called via cosmo.help)
-local ok, cosmo = pcall(require, "cosmo")
-if ok and cosmo then
-  help.register(cosmo, "cosmo")
+-- Lazy registration of cosmo module (called when help is first used)
+local function ensure_registered()
+  if not help._registered then
+    local ok, cosmo = pcall(require, "cosmo")
+    if ok and cosmo then
+      help.register(cosmo, "cosmo")
+      help._registered = true
+    end
+  end
+end
+
+-- Wrap show and search to ensure registration
+local original_show = help.show
+function help.show(what)
+  ensure_registered()
+  return original_show(what)
+end
+
+local original_search = help.search
+function help.search(pattern)
+  ensure_registered()
+  return original_search(pattern)
 end
 
 return help

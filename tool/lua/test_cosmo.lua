@@ -12,7 +12,7 @@ assert(type(cosmo.unix) == "table", "cosmo.unix should be a table")
 assert(type(cosmo.path) == "table", "cosmo.path should be a table")
 assert(type(cosmo.re) == "table", "cosmo.re should be a table")
 assert(type(cosmo.argon2) == "table", "cosmo.argon2 should be a table")
-assert(type(cosmo.sqlite3) == "table", "cosmo.sqlite3 should be a table")
+assert(type(cosmo.lsqlite3) == "table", "cosmo.lsqlite3 should be a table")
 
 -- test a function actually works
 local json = cosmo.EncodeJson({foo = "bar"})

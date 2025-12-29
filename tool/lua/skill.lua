@@ -118,12 +118,12 @@ See `help("unix")` for 100+ additional syscall wrappers.
 | `cosmo.re.compile(pattern)` | Compile regex for reuse |
 | `regex:search(str)` | Search with compiled regex |
 
-### SQLite (replaces lsqlite3)
+### SQLite (lsqlite3)
 
 | Function | Purpose |
 |----------|---------|
-| `cosmo.sqlite3.open(path)` | Open database |
-| `cosmo.sqlite3.open_memory()` | Open in-memory database |
+| `cosmo.lsqlite3.open(path)` | Open database |
+| `cosmo.lsqlite3.open_memory()` | Open in-memory database |
 | `db:exec(sql)` | Execute SQL |
 | `db:prepare(sql)` | Prepare statement |
 | `stmt:step()` | Execute prepared statement |
