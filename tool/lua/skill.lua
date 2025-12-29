@@ -162,22 +162,30 @@ end
 Use `help.search(keyword)` to find functions. The help system has complete documentation for all functions including parameters, return values, and examples.
 ]]
 
+local unix = require("cosmo").unix
+
 local function write_file(path, content)
   local dir = path:match("(.+)/[^/]+$")
   if dir then
-    os.execute('mkdir -p "' .. dir .. '"')
+    local ok, err = unix.makedirs(dir, 0755)
+    if not ok and err:errno() ~= unix.EEXIST then
+      return nil, "makedirs failed: " .. tostring(err)
+    end
   end
-  local f = io.open(path, "w")
-  if not f then
-    return nil, "failed to open file: " .. path
+  local fd, err = unix.open(path, unix.O_WRONLY | unix.O_CREAT | unix.O_TRUNC, 0644)
+  if not fd then
+    return nil, "failed to open file: " .. tostring(err)
   end
-  f:write(content)
-  f:close()
+  local ok, werr = unix.write(fd, content)
+  unix.close(fd)
+  if not ok then
+    return nil, "failed to write file: " .. tostring(werr)
+  end
   return true
 end
 
 local function default_path()
-  local home = os.getenv("HOME")
+  local home = unix.getenv("HOME")
   if not home then
     return nil, "HOME environment variable not set"
   end
