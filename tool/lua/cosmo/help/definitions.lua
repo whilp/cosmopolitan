@@ -23,13 +23,21 @@
 ---   Disabled for HTTPS. Pass a table to store socket mappings
 ---   across calls. Set table.close=true to close after request.
 ---
+--- Cosmo additions:
+---
 --- - `proxy` (string): HTTP proxy URL, e.g. "http://proxy:8080".
----   Supports authentication: "http://user:pass@proxy:8080".
----   Falls back to http_proxy/HTTP_PROXY environment variables.
+---   Supports Basic authentication: "http://user:pass@proxy:8080".
 ---
 --- - `maxresponse` (default: 104857600): Maximum response size in bytes.
+---   Protects against memory exhaustion from large responses.
 ---
 --- - `resettls` (default: true): Reset TLS state after fork.
+---   Ensures child processes get fresh DRBG entropy.
+---
+--- Environment variables:
+---
+--- - `http_proxy` / `HTTP_PROXY`: Default proxy URL when `proxy` option
+---   is not specified. Supports same format as the option.
 ---
 --- On redirect, method and body are preserved except for 303 (See Other),
 --- which converts to GET with no body.
