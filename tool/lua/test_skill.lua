@@ -1,13 +1,13 @@
 -- test skill module
 
 local skill = require("cosmo.skill")
+local unix = require("cosmo.unix")
 
 assert(skill, "skill module should load")
 assert(type(skill.install) == "function", "skill.install should be a function")
 
 -- Test install to temp directory
-local tmpdir = os.tmpname()
-os.remove(tmpdir)
+local tmpdir = (os.getenv("TMPDIR") or "/tmp") .. "/lua_" .. unix.getpid()
 local ok, err = skill.install(tmpdir .. "/")
 assert(ok, "skill.install failed: " .. (err or ""))
 
