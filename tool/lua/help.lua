@@ -329,7 +329,10 @@ local function list_module(prefix)
   end
 
   if #constants > 0 then
-    table.insert(lines, "Constants: (" .. #constants .. " total, use help.search to find)")
+    table.insert(lines, "Constants:")
+    for _, item in ipairs(constants) do
+      table.insert(lines, "  " .. item.name)
+    end
   end
 
   return table.concat(lines, "\n")
