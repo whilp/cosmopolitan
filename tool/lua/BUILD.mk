@@ -79,24 +79,25 @@ TOOL_LUA_ASSETS =							\
 	o/$(MODE)/tool/lua/.lua/cosmo/help/init.lua.zip.o		\
 	o/$(MODE)/tool/lua/.lua/cosmo/skill/init.lua.zip.o
 
-# Strip tool/lua/ prefix so files end up at /zip/.lua/
-$(TOOL_LUA_ASSETS): private ZIPOBJ_FLAGS += -C2
+# Strip o/$(MODE)/tool/lua/ prefix so files end up at /zip/.lua/
+$(TOOL_LUA_ASSETS): private ZIPOBJ_FLAGS += -C4
 
-# Copy source files to .lua/ for embedding
-tool/lua/.lua/definitions.lua: tool/net/definitions.lua
-	@cp $< $@
-
-tool/lua/.lua/cosmo/help/init.lua: tool/lua/help/init.lua
+# Copy source files to output dir for embedding
+o/$(MODE)/tool/lua/.lua/definitions.lua: tool/net/definitions.lua
 	@mkdir -p $(@D)
 	@cp $< $@
 
-tool/lua/.lua/cosmo/skill/init.lua: tool/lua/skill/init.lua
+o/$(MODE)/tool/lua/.lua/cosmo/help/init.lua: tool/lua/help/init.lua
 	@mkdir -p $(@D)
 	@cp $< $@
 
-o/$(MODE)/tool/lua/.lua/definitions.lua.zip.o: tool/lua/.lua/definitions.lua
-o/$(MODE)/tool/lua/.lua/cosmo/help/init.lua.zip.o: tool/lua/.lua/cosmo/help/init.lua
-o/$(MODE)/tool/lua/.lua/cosmo/skill/init.lua.zip.o: tool/lua/.lua/cosmo/skill/init.lua
+o/$(MODE)/tool/lua/.lua/cosmo/skill/init.lua: tool/lua/skill/init.lua
+	@mkdir -p $(@D)
+	@cp $< $@
+
+o/$(MODE)/tool/lua/.lua/definitions.lua.zip.o: o/$(MODE)/tool/lua/.lua/definitions.lua
+o/$(MODE)/tool/lua/.lua/cosmo/help/init.lua.zip.o: o/$(MODE)/tool/lua/.lua/cosmo/help/init.lua
+o/$(MODE)/tool/lua/.lua/cosmo/skill/init.lua.zip.o: o/$(MODE)/tool/lua/.lua/cosmo/skill/init.lua
 
 o/$(MODE)/tool/lua/lua.dbg:						\
 		$(TOOL_LUA_DEPS)					\
