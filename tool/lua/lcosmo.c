@@ -22,6 +22,7 @@
 #include "third_party/lua/cosmo.h"
 #include "tool/net/lfuncs.h"
 #include "tool/net/lpath.h"
+#include "tool/net/lhttp.h"
 #include "tool/net/ljson.h"
 #include "tool/net/lfetch.h"
 #include "net/http/http.h"
@@ -224,6 +225,10 @@ int luaopen_cosmo(lua_State *L) {
   /* add sqlite3 submodule */
   luaopen_lsqlite3(L);
   lua_setfield(L, -2, "sqlite3");
+
+  /* add http submodule */
+  LuaHttp(L);
+  lua_setfield(L, -2, "http");
 
   return 1;
 }
