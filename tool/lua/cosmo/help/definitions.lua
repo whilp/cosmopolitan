@@ -1,6 +1,9 @@
 ---@meta
 -- Cosmo Lua documentation overrides
 
+---@class cosmo
+cosmo = {}
+
 --- Sends an HTTP/HTTPS request to the specified URL.
 ---
 --- If only URL is provided, sends a GET request.
