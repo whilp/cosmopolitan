@@ -5,39 +5,42 @@ local help = {
   _docs = {},           -- name -> {desc, params, returns, signature}
   _funcs = {},          -- function reference -> name
   _loaded = false,
-  _available = nil,     -- cache of available module prefixes
 }
 
--- Check if a module prefix is available at runtime
--- This filters out documented but not enabled modules (e.g., maxmind, finger)
-local function is_module_available(prefix)
-  -- Top-level functions are always available
-  if prefix == "" then return true end
-
-  -- Check cache
-  if help._available then
-    return help._available[prefix] == true
-  end
-
-  -- Build cache by checking what's actually in cosmo
-  help._available = {}
+-- Check if a documented item is available at runtime
+-- This filters out documented but not enabled items (modules, functions, etc.)
+local function is_available(name)
   local ok, cosmo = pcall(require, "cosmo")
-  if ok and cosmo then
-    for name, val in pairs(cosmo) do
-      if type(val) == "table" then
-        help._available[name] = true
-      end
-    end
+  if not ok or not cosmo then return false end
+
+  -- Split the name into parts (e.g., "unix.fork" -> {"unix", "fork"})
+  local parts = {}
+  for part in name:gmatch("[^%.]+") do
+    table.insert(parts, part)
   end
 
-  return help._available[prefix] == true
-end
+  if #parts == 0 then return false end
 
--- Get the top-level module prefix from a doc name
--- Returns "" for top-level functions (no dot in name)
-local function get_module_prefix(name)
-  local prefix = name:match("^([^%.]+)%.")
-  return prefix or ""
+  -- Top-level function (e.g., "EncodeBase64")
+  if #parts == 1 then
+    return cosmo[parts[1]] ~= nil
+  end
+
+  -- Module function (e.g., "unix.fork") or class method (e.g., "sqlite3.Database.close")
+  local current = cosmo[parts[1]]
+  if current == nil then return false end
+
+  -- For simple module.function, check if it exists
+  if #parts == 2 then
+    -- Could be a function or a class table
+    return current[parts[2]] ~= nil
+  end
+
+  -- For module.Class.method (e.g., sqlite3.Database.close), we trust that
+  -- if the module exists, its class methods are available. We can't easily
+  -- check methods on userdata metatables without creating instances.
+  -- Just verify the module is available.
+  return true
 end
 
 -- Parse a definitions.lua file and extract documentation
@@ -211,16 +214,15 @@ local function load_defs(modname)
   return parse_definitions(content)
 end
 
--- Load definitions and filter out unavailable modules
+-- Load definitions and filter out unavailable items
 local function load_definitions()
   if help._loaded then return end
   local all_docs = load_defs("definitions") or {}
 
-  -- Filter out docs for modules that aren't available at runtime
+  -- Filter out docs for items that aren't available at runtime
   help._docs = {}
   for name, doc in pairs(all_docs) do
-    local prefix = get_module_prefix(name)
-    if is_module_available(prefix) then
+    if is_available(name) then
       help._docs[name] = doc
     end
   end

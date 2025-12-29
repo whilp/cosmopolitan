@@ -126,7 +126,47 @@ for prefix in pairs(modules) do
   end
 end
 
--- Test 7: Check that sqlite3 docs exist (not lsqlite3)
+-- Test 7: Check for undocumented functions (warnings, not failures)
+print()
+print("Test: Check for undocumented functions")
+local undocumented = {}
+
+-- Check top-level functions
+for name, val in pairs(cosmo) do
+  if type(val) == "function" then
+    if not help._docs[name] then
+      table.insert(undocumented, "cosmo." .. name)
+    end
+  end
+end
+
+-- Check module functions (not class methods - those are on metatables)
+-- Skip internal functions like __newindex
+for modname in pairs(EXPECTED_MODULES) do
+  local mod = cosmo[modname]
+  if mod and type(mod) == "table" then
+    for name, val in pairs(mod) do
+      if type(val) == "function" and not name:match("^__") then
+        local fullname = modname .. "." .. name
+        if not help._docs[fullname] then
+          table.insert(undocumented, "cosmo." .. fullname)
+        end
+      end
+    end
+  end
+end
+
+if #undocumented > 0 then
+  table.sort(undocumented)
+  print("  WARNING: " .. #undocumented .. " undocumented functions found:")
+  for _, name in ipairs(undocumented) do
+    print("    - " .. name)
+  end
+else
+  print("  OK: all available functions are documented")
+end
+
+-- Test 8: Check that sqlite3 docs exist (not lsqlite3)
 print()
 print("Test: sqlite3 documentation naming")
 if docs["cosmo-sqlite3.md"] then
