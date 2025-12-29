@@ -75,6 +75,7 @@ o/$(MODE)/tool/lua/lua.main.o: third_party/lua/lua.main.c
 	@$(COMPILE) -AOBJECTIFY.c $(OBJECTIFY.c) $(OUTPUT_OPTION) -DLUA_COSMO $<
 
 TOOL_LUA_ASSETS =							\
+	o/$(MODE)/tool/net/definitions.lua.zip.o			\
 	o/$(MODE)/tool/lua/cosmo/help/init.lua.zip.o			\
 	o/$(MODE)/tool/lua/cosmo/help/definitions.lua.zip.o
 

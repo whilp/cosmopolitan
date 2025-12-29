@@ -169,34 +169,38 @@ local function format_doc(name, doc)
   return table.concat(lines, "\n")
 end
 
--- Load definitions from file
+-- Load definitions from file(s)
 local function load_definitions()
   if help._loaded then return end
 
-  -- Find the definitions file relative to this module
-  local info = debug.getinfo(1, "S")
-  local this_file = info.source:match("^@(.+)$") or info.source
-  local help_dir = this_file:match("(.+)/[^/]+$") or "."
-  local def_path = help_dir .. "/definitions.lua"
-
-  local f = io.open(def_path, "r")
-  if not f then
-    -- Try alternate locations (embedded zip paths)
-    local alternates = {
-      "/zip/cosmo/help/definitions.lua",
-      "/zip/help/definitions.lua",
-      "tool/lua/cosmo/help/definitions.lua",
-    }
-    for _, path in ipairs(alternates) do
-      f = io.open(path, "r")
-      if f then break end
+  local function try_open(paths)
+    for _, path in ipairs(paths) do
+      local f = io.open(path, "r")
+      if f then return f end
     end
   end
 
+  -- Load base definitions (upstream redbean docs)
+  local f = try_open({
+    "/zip/.lua/definitions.lua",
+    "tool/net/definitions.lua",
+  })
   if f then
-    local content = f:read("*a")
+    help._docs = parse_definitions(f:read("*a"))
     f:close()
-    help._docs = parse_definitions(content)
+  end
+
+  -- Load override definitions (cosmo enhancements)
+  f = try_open({
+    "/zip/cosmo/help/definitions.lua",
+    "tool/lua/cosmo/help/definitions.lua",
+  })
+  if f then
+    local overrides = parse_definitions(f:read("*a"))
+    f:close()
+    for name, doc in pairs(overrides) do
+      help._docs[name] = doc
+    end
   end
 
   help._loaded = true
@@ -318,24 +322,40 @@ Usage:
     return
   end
 
-  -- Look up exact match
-  local doc = help._docs[name]
+  -- Look up with fallback: cosmo.X -> X, cosmo.unix.X -> unix.X
+  local function find_doc(n)
+    if help._docs[n] then return help._docs[n], n end
+    -- Try stripping cosmo. prefix
+    local stripped = n:match("^cosmo%.(.+)$")
+    if stripped and help._docs[stripped] then
+      return help._docs[stripped], stripped
+    end
+    return nil
+  end
+
+  local doc, found_name = find_doc(name)
   if doc then
-    print(format_doc(name, doc))
+    print(format_doc(found_name, doc))
     return
   end
 
-  -- Check if it's a module prefix
-  local is_module = false
-  for dname in pairs(help._docs) do
-    if dname:match("^" .. name:gsub("%.", "%%.") .. "%.") then
-      is_module = true
-      break
+  -- Check if it's a module prefix (try both with and without cosmo.)
+  local function is_module_prefix(prefix)
+    local pattern = "^" .. prefix:gsub("%.", "%%.") .. "%."
+    for dname in pairs(help._docs) do
+      if dname:match(pattern) then return true end
     end
+    return false
   end
 
-  if is_module then
+  if is_module_prefix(name) then
     print(list_module(name))
+    return
+  end
+  -- Try without cosmo. prefix
+  local stripped = name:match("^cosmo%.(.+)$")
+  if stripped and is_module_prefix(stripped) then
+    print(list_module(name))  -- Keep original name for display
     return
   end
 
