@@ -1,7 +1,8 @@
 -- Tests for documentation accuracy
 -- Verifies that:
 --   a) All loadable modules are documented
---   b) All documented modules are loadable
+--   b) All documented modules are loadable (via runtime filtering)
+--   c) Unavailable modules are filtered out at runtime
 
 local cosmo = require("cosmo")
 local help = require("cosmo.help")
@@ -10,8 +11,7 @@ local skill = require("cosmo.skill")
 -- Load the help documentation
 help.load()
 
--- Test 1: All documented module prefixes should correspond to loadable modules
--- Get all documented prefixes (module names)
+-- Test 1: Get all documented module prefixes after runtime filtering
 local function get_documented_prefixes()
   local prefixes = {}
   for name in pairs(help._docs) do
@@ -29,70 +29,25 @@ local EXPECTED_MODULES = {
   path = true,
   re = true,
   argon2 = true,
-  sqlite3 = true,  -- Note: exposed as sqlite3, NOT lsqlite3
+  sqlite3 = true,
 }
 
--- Get documented prefixes
+-- Get documented prefixes (after runtime filtering)
 local documented = get_documented_prefixes()
-print("Documented prefixes:")
+print("Documented prefixes (after runtime filtering):")
 for prefix in pairs(documented) do
   print("  - " .. prefix)
 end
 print()
 
--- Test 2: Every documented prefix should be a loadable module or valid class
--- sqlite3.Database, unix.Dir, etc. are classes within their parent module
-local KNOWN_CLASSES = {
-  -- sqlite3 classes (now properly prefixed)
-  ["sqlite3.Database"] = true,
-  ["sqlite3.Statement"] = true,
-  ["sqlite3.Context"] = true,
-  ["sqlite3.Rebaser"] = true,
-  ["sqlite3.Session"] = true,
-  ["sqlite3.Iterator"] = true,
-  ["sqlite3.VM"] = true,
-  -- unix classes
-  ["unix.Memory"] = true,
-  ["unix.Dir"] = true,
-  ["unix.Rusage"] = true,
-  ["unix.Stat"] = true,
-  ["unix.Sigset"] = true,
-  ["unix.Errno"] = true,
-  -- re classes
-  ["re.Errno"] = true,
-  ["re.Regex"] = true,
-}
-
-print("Test: Documented modules should match loadable modules")
 local failed = false
 
+-- Test 2: Every documented prefix should be a loadable module
+print("Test: Documented modules should match loadable modules")
 for prefix in pairs(documented) do
-  -- Check if this prefix corresponds to a loadable module
-  local is_module = EXPECTED_MODULES[prefix]
-  local is_class_prefix = false
-
-  -- Check if this prefix is used by a known class (e.g., lsqlite3 in lsqlite3.Database)
-  for class_name in pairs(KNOWN_CLASSES) do
-    if class_name:match("^" .. prefix .. "%.") then
-      is_class_prefix = true
-      break
-    end
-  end
-
-  if not is_module then
-    if prefix == "lsqlite3" then
-      print("  FAIL: 'lsqlite3' is documented but module is exposed as 'sqlite3'")
-      failed = true
-    elseif prefix == "maxmind" then
-      print("  FAIL: 'maxmind' is documented but not enabled in lua binary")
-      failed = true
-    elseif prefix == "finger" then
-      print("  FAIL: 'finger' is documented but not enabled in lua binary")
-      failed = true
-    elseif not is_class_prefix then
-      print("  FAIL: '" .. prefix .. "' is documented but not a loadable module")
-      failed = true
-    end
+  if not EXPECTED_MODULES[prefix] then
+    print("  FAIL: '" .. prefix .. "' is documented but not a loadable module")
+    failed = true
   else
     print("  OK: '" .. prefix .. "' is documented and loadable")
   end
@@ -110,7 +65,7 @@ for modname in pairs(EXPECTED_MODULES) do
   end
 end
 
--- Test 4: Verify the modules are actually loadable
+-- Test 4: Verify the modules are actually loadable from cosmo
 print()
 print("Test: Modules are actually loadable from cosmo")
 for modname in pairs(EXPECTED_MODULES) do
@@ -126,24 +81,43 @@ for modname in pairs(EXPECTED_MODULES) do
   end
 end
 
--- Test 5: Skill generation should only produce docs for valid modules
+-- Test 5: Verify runtime filtering works (unavailable modules are filtered out)
+print()
+print("Test: Unavailable modules are filtered out at runtime")
+
+-- These modules are documented in definitions.lua but not enabled in the lua binary
+local UNAVAILABLE_MODULES = {"maxmind", "finger"}
+
+for _, modname in ipairs(UNAVAILABLE_MODULES) do
+  -- Check it's not in cosmo
+  if cosmo[modname] ~= nil then
+    print("  SKIP: '" .. modname .. "' is now available (test needs update)")
+  else
+    -- Check it's filtered out of help._docs
+    local found = false
+    for name in pairs(help._docs) do
+      if name:match("^" .. modname .. "%.") then
+        found = true
+        break
+      end
+    end
+    if found then
+      print("  FAIL: '" .. modname .. "' is not available but still in help._docs")
+      failed = true
+    else
+      print("  OK: '" .. modname .. "' is correctly filtered out")
+    end
+  end
+end
+
+-- Test 6: Skill generation should only produce docs for valid modules
 print()
 print("Test: Skill generates docs only for valid modules")
 local docs, modules = skill.generate_docs()
 
--- Check that no invalid module prefixes are in the generated docs
 for prefix in pairs(modules) do
   if prefix ~= "" then  -- empty prefix is top-level functions
-    if prefix == "lsqlite3" then
-      print("  FAIL: skill generates docs for 'lsqlite3' (should be 'sqlite3')")
-      failed = true
-    elseif prefix == "maxmind" then
-      print("  FAIL: skill generates docs for 'maxmind' (not enabled)")
-      failed = true
-    elseif prefix == "finger" then
-      print("  FAIL: skill generates docs for 'finger' (not enabled)")
-      failed = true
-    elseif not EXPECTED_MODULES[prefix] then
+    if not EXPECTED_MODULES[prefix] then
       print("  FAIL: skill generates docs for unknown module '" .. prefix .. "'")
       failed = true
     else
@@ -152,7 +126,7 @@ for prefix in pairs(modules) do
   end
 end
 
--- Test 6: Check that sqlite3 docs exist (not lsqlite3)
+-- Test 7: Check that sqlite3 docs exist (not lsqlite3)
 print()
 print("Test: sqlite3 documentation naming")
 if docs["cosmo-sqlite3.md"] then

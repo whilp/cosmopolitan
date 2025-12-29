@@ -5,7 +5,40 @@ local help = {
   _docs = {},           -- name -> {desc, params, returns, signature}
   _funcs = {},          -- function reference -> name
   _loaded = false,
+  _available = nil,     -- cache of available module prefixes
 }
+
+-- Check if a module prefix is available at runtime
+-- This filters out documented but not enabled modules (e.g., maxmind, finger)
+local function is_module_available(prefix)
+  -- Top-level functions are always available
+  if prefix == "" then return true end
+
+  -- Check cache
+  if help._available then
+    return help._available[prefix] == true
+  end
+
+  -- Build cache by checking what's actually in cosmo
+  help._available = {}
+  local ok, cosmo = pcall(require, "cosmo")
+  if ok and cosmo then
+    for name, val in pairs(cosmo) do
+      if type(val) == "table" then
+        help._available[name] = true
+      end
+    end
+  end
+
+  return help._available[prefix] == true
+end
+
+-- Get the top-level module prefix from a doc name
+-- Returns "" for top-level functions (no dot in name)
+local function get_module_prefix(name)
+  local prefix = name:match("^([^%.]+)%.")
+  return prefix or ""
+end
 
 -- Parse a definitions.lua file and extract documentation
 local function parse_definitions(content)
@@ -178,10 +211,20 @@ local function load_defs(modname)
   return parse_definitions(content)
 end
 
--- Load definitions
+-- Load definitions and filter out unavailable modules
 local function load_definitions()
   if help._loaded then return end
-  help._docs = load_defs("definitions") or {}
+  local all_docs = load_defs("definitions") or {}
+
+  -- Filter out docs for modules that aren't available at runtime
+  help._docs = {}
+  for name, doc in pairs(all_docs) do
+    local prefix = get_module_prefix(name)
+    if is_module_available(prefix) then
+      help._docs[name] = doc
+    end
+  end
+
   help._loaded = true
 end
 

@@ -3855,6 +3855,147 @@ function path.isdir(path) end
 ---@nodiscard
 function path.islink(path) end
 
+--- ### MaxMind
+---
+--- This module may be used to get city/country/asn/etc from IPs, e.g.
+---
+---     -- .init.lua
+---     maxmind = require 'maxmind'
+---     asndb = maxmind.open('/usr/local/share/maxmind/GeoLite2-ASN.mmdb')
+---
+---     -- request handler
+---     as = asndb:lookup(GetRemoteAddr())
+---     if as then
+---         asnum = as:get('autonomous_system_number')
+---         asorg = as:get('autonomous_system_organization')
+---         Write(EscapeHtml(asnum))
+---         Write(' ')
+---         Write(EscapeHtml(asorg))
+---     end
+---
+--- The database file is distributed by MaxMind. You need to sign up on their
+--- website to get a free copy. The database has a generalized structure. For a
+--- concrete example of how this module may be used, please see `maxmind.lua`
+--- in `redbean-demo`.
+maxmind = {}
+
+---@param filepath string the location of the MaxMind database
+---@return maxmind.Db db
+---@nodiscard
+function maxmind.open(filepath) end
+
+---@class maxmind.Db
+maxmind.Db = {}
+
+---@param ip uint32 IPv4 address as uint32
+---@return maxmind.Result? result
+---@nodiscard
+function maxmind.Db:lookup(ip) end
+
+---@class maxmind.Result
+maxmind.Result = {}
+
+---@return any
+---@nodiscard
+function maxmind.Result:get() end
+
+---@return integer
+---@nodiscard
+function maxmind.Result:netmask() end
+
+--- This is an experimental module that, like the maxmind module, gives you insight
+--- into what kind of device is connecting to your redbean. This module can help
+--- you protect your redbean because it provides tools for identifying clients that
+--- misrepresent themselves. For example the User-Agent header might report itself
+--- as a Windows computer when the SYN packet says it's a Linux computer.
+---
+---    function OnServerListen(fd, ip, port)
+---        unix.setsockopt(fd, unix.SOL_TCP, unix.TCP_SAVE_SYN, true)
+---        return false
+---    end
+---
+---    function OnClientConnection(ip, port, serverip, serverport)
+---        fd = GetClientFd()
+---        syn = unix.getsockopt(fd, unix.SOL_TCP, unix.TCP_SAVED_SYN)
+---    end
+---
+---    function OnHttpRequest()
+---        Log(kLogInfo, "client is running %s and reports %s" % {
+---                finger.GetSynFingerOs(finger.FingerSyn(syn)),
+---                GetHeader('User-Agent')})
+---        Route()
+---    end
+---
+finger = {}
+
+--- Fingerprints IP+TCP SYN packet.
+---
+--- This returns a hash-like magic number that reflects the SYN packet structure,
+--- e.g. ordering of options, maximum segment size, etc. We make no guarantees this
+--- hashing algorithm won't change as we learn more about the optimal way to
+---- fingerprint, so be sure to save your syn packets too if you're using this
+--- feature, in case they need to be rehashed in the future.
+---
+--- This function is nil/error propagating.
+---@param syn_packet_bytes string
+---@return integer synfinger uint32
+---@nodiscard
+---@overload fun(syn_packet_bytes: string): nil, error: string
+---@overload fun(nil: nil, error?: string): nil, error: string?
+function finger.FingerSyn(syn_packet_bytes) end
+
+--- Fingerprints IP+TCP SYN packet.
+---
+--- If synfinger is a known hard-coded magic number, then one of the following
+--- strings may be returned:
+---
+--- - `"LINUX"`
+--- - `"WINDOWS"`
+--- - `"XNU"`
+--- - `"NETBSD"`
+--- - `"FREEBSD"`
+--- - `"OPENBSD"`
+---
+--- If this function returns `nil`, then one thing you can do to help is file an
+--- issue and share with us your SYN packet specimens. The way we prefer to receive
+--- them is in `EncodeLua(syn_packet_bytes)` format along with details on the
+--- operating system which you must know.
+---@param synfinger integer
+---@return "LINUX"|"WINDOWS"|"XNU"|"NETBSD"|"FREEBSD"|"OPENBSD" osname
+---@nodiscard
+---@overload fun(synfinger: integer): nil, error: string
+function finger.GetSynFingerOs(synfinger) end
+
+--- Describes IP+TCP SYN packet.
+---
+--- The layout looks as follows:
+---
+--- - `TTL:OPTIONS:WSIZE:MSS`
+---
+--- The `TTL`, `WSIZE`, and `MSS` fields are unsigned decimal fields.
+---
+--- The `OPTIONS` field communicates the ordering of the commonly used subset of
+--- tcp options. The following character mappings are defined. TCP options not on
+--- this list will be ignored.
+---
+--- - `E`: End of Option list
+--- - `N`: No-Operation
+--- - `M`: Maximum Segment Size
+--- - `K`: Window Scale
+--- - `O`: SACK Permitted
+--- - `A`: SACK
+--- - `e`: Echo (obsolete)
+--- - `r`: Echo reply (obsolete)
+--- - `T`: Timestamps
+---
+--- This function is nil/error propagating.
+---@param syn_packet_bytes string
+---@return string description
+---@nodiscard
+---@overload fun(syn_packet_bytes: string): nil, error: string
+---@overload fun(nil: nil, error?: string): nil, error: string?
+function finger.DescribeSyn(syn_packet_bytes) end
+
 --- This module implements a password hashing algorithm based on blake2b that won
 --- the Password Hashing Competition.
 ---
