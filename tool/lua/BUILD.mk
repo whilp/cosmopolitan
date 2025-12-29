@@ -87,11 +87,11 @@ o/$(MODE)/tool/lua/.lua/definitions.lua: tool/net/definitions.lua
 	@mkdir -p $(@D)
 	@cp $< $@
 
-o/$(MODE)/tool/lua/.lua/cosmo/help/init.lua: tool/lua/help/init.lua
+o/$(MODE)/tool/lua/.lua/cosmo/help/init.lua: tool/lua/help.lua
 	@mkdir -p $(@D)
 	@cp $< $@
 
-o/$(MODE)/tool/lua/.lua/cosmo/skill/init.lua: tool/lua/skill/init.lua
+o/$(MODE)/tool/lua/.lua/cosmo/skill/init.lua: tool/lua/skill.lua
 	@mkdir -p $(@D)
 	@cp $< $@
 
