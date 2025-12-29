@@ -39,6 +39,12 @@
 --- - `http_proxy` / `HTTP_PROXY`: Default proxy URL when `proxy` option
 ---   is not specified. Supports same format as the option.
 ---
+--- - `SSL_CERT_FILE`: Path to CA certificate bundle file for TLS verification.
+---   Overrides default system CA locations.
+---
+--- - `SSL_NO_SYSTEM_CERTS`: If set, skip loading system CA certificates.
+---   Only embedded certificates will be used.
+---
 --- On redirect, method and body are preserved except for 303 (See Other),
 --- which converts to GET with no body.
 ---
