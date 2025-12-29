@@ -59,6 +59,7 @@ TOOL_LUA_DIRECTDEPS =							\
 	THIRD_PARTY_GDTOA						\
 	THIRD_PARTY_GETOPT						\
 	THIRD_PARTY_LINENOISE						\
+	THIRD_PARTY_LZ4CLI						\
 	THIRD_PARTY_LUA							\
 	THIRD_PARTY_LUA_UNIX						\
 	THIRD_PARTY_MBEDTLS						\
@@ -125,12 +126,17 @@ o/$(MODE)/tool/lua/test_getopt.ok: o/$(MODE)/tool/lua/lua.dbg tool/lua/test_geto
 	$< tool/lua/test_getopt.lua
 	@touch $@
 
+o/$(MODE)/tool/lua/test_lz4.ok: o/$(MODE)/tool/lua/lua.dbg tool/lua/test_lz4.lua
+	$< tool/lua/test_lz4.lua
+	@touch $@
+
 TOOL_LUA_TESTS =							\
 	o/$(MODE)/tool/lua/test_cosmo.ok				\
 	o/$(MODE)/tool/lua/test_help.ok					\
 	o/$(MODE)/tool/lua/test_skill.ok				\
 	o/$(MODE)/tool/lua/test_docs.ok					\
 	o/$(MODE)/tool/lua/test_getopt.ok				\
+	o/$(MODE)/tool/lua/test_lz4.ok					\
 	o/$(MODE)/tool/lua/test_strftime.ok
 
 .PHONY: o/$(MODE)/tool/lua
