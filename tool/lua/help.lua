@@ -214,16 +214,38 @@ local function load_defs(modname)
   return parse_definitions(content)
 end
 
+-- Translate documentation names from upstream conventions to cosmo conventions
+-- e.g., lsqlite3.open -> sqlite3.open, Database.close -> sqlite3.Database.close
+local function translate_name(name)
+  -- lsqlite3 -> sqlite3 (cosmo exposes it as cosmo.sqlite3)
+  if name:match("^lsqlite3%.") then
+    return name:gsub("^lsqlite3%.", "sqlite3.")
+  end
+  if name == "lsqlite3" then
+    return "sqlite3"
+  end
+  -- Standalone class names belong to sqlite3
+  if name:match("^Database%.") or name:match("^Context%.") or name:match("^VM%.") then
+    return "sqlite3." .. name
+  end
+  return name
+end
+
 -- Load definitions and filter out unavailable items
 local function load_definitions()
   if help._loaded then return end
   local all_docs = load_defs("definitions") or {}
 
-  -- Filter out docs for items that aren't available at runtime
+  -- Translate names and filter out docs for items that aren't available at runtime
   help._docs = {}
   for name, doc in pairs(all_docs) do
-    if is_available(name) then
-      help._docs[name] = doc
+    local translated = translate_name(name)
+    -- Update signature to use translated name
+    if translated ~= name then
+      doc.signature = doc.signature:gsub("^" .. name:gsub("%.", "%%."), translated)
+    end
+    if is_available(translated) then
+      help._docs[translated] = doc
     end
   end
 
