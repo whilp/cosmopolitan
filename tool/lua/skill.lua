@@ -170,16 +170,17 @@ Use `help.search(keyword)` to find functions. The help system has complete docum
 ]]
 
 local unix = require("cosmo.unix")
+local pathlib = require("cosmo.path")
 
-local function write_file(path, content)
-  local dir = path:match("(.+)/[^/]+$")
-  if dir then
+local function write_file(filepath, content)
+  local dir = pathlib.dirname(filepath)
+  if dir and dir ~= "" then
     local ok, err = unix.makedirs(dir, tonumber("755", 8))
     if not ok and err:errno() ~= unix.EEXIST then
       return nil, "makedirs failed: " .. tostring(err)
     end
   end
-  local fd, err = unix.open(path, unix.O_WRONLY | unix.O_CREAT | unix.O_TRUNC, tonumber("644", 8))
+  local fd, err = unix.open(filepath, unix.O_WRONLY | unix.O_CREAT | unix.O_TRUNC, tonumber("644", 8))
   if not fd then
     return nil, "failed to open file: " .. tostring(err)
   end
@@ -192,27 +193,28 @@ local function write_file(path, content)
 end
 
 local function default_path()
-  local home = unix.getenv("HOME")
+  local home = os.getenv("HOME")
   if not home then
     return nil, "HOME environment variable not set"
   end
-  return home .. "/.claude/skills"
+  return pathlib.join(home, ".claude", "skills")
 end
 
-function skill.install(path)
-  if not path then
+function skill.install(dest)
+  if not dest then
     local default, err = default_path()
     if not default then
       return nil, err
     end
-    path = default
-  elseif path:sub(-1) ~= "/" then
-    path = path .. "/.claude/skills"
+    dest = default
+  elseif dest:sub(-1) ~= "/" then
+    dest = pathlib.join(dest, ".claude", "skills")
   end
 
-  local skill_dir = path .. "/" .. SKILL_NAME
+  local skill_dir = pathlib.join(dest, SKILL_NAME)
+  local skill_file = pathlib.join(skill_dir, "SKILL.md")
 
-  local ok, err = write_file(skill_dir .. "/SKILL.md", SKILL_CONTENT)
+  local ok, err = write_file(skill_file, SKILL_CONTENT)
   if not ok then
     return nil, "failed to write SKILL.md: " .. err
   end
