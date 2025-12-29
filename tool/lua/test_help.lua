@@ -1,17 +1,10 @@
 -- Tests for the help module parser and functionality
 
 local cosmo = require("cosmo")
+local help = require("cosmo.help")
 
--- Test 1: cosmo.help exists and is callable
-assert(type(cosmo.help) == "function" or type(cosmo.help) == "table",
-       "cosmo.help should exist")
-
--- Trigger lazy load by calling help
-cosmo.help("cosmo")
-
--- Now cosmo.help is the actual help module
-local help = cosmo.help
-assert(type(help) == "table", "after first call, cosmo.help should be the help table")
+-- Test 1: help module loaded correctly
+assert(type(help) == "table", "help should be a table")
 assert(type(help.show) == "function", "help.show should be a function")
 assert(type(help.search) == "function", "help.search should be a function")
 assert(type(help.register) == "function", "help.register should be a function")

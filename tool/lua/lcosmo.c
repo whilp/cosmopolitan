@@ -225,14 +225,5 @@ int luaopen_cosmo(lua_State *L) {
   luaopen_lsqlite3(L);
   lua_setfield(L, -2, "sqlite3");
 
-  /* add help function (lazy-loads help module) */
-  luaL_dostring(L,
-    "return function(...)\n"
-    "  local h = require('help')\n"
-    "  cosmo.help = h\n"
-    "  return h(...)\n"
-    "end\n");
-  lua_setfield(L, -2, "help");
-
   return 1;
 }

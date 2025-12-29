@@ -181,10 +181,11 @@ local function load_definitions()
 
   local f = io.open(def_path, "r")
   if not f then
-    -- Try alternate locations
+    -- Try alternate locations (embedded zip paths)
     local alternates = {
-      "tool/lua/help/definitions.lua",
-      "./help/definitions.lua",
+      "/zip/cosmo/help/definitions.lua",
+      "/zip/help/definitions.lua",
+      "tool/lua/cosmo/help/definitions.lua",
     }
     for _, path in ipairs(alternates) do
       f = io.open(path, "r")
