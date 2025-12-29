@@ -33,6 +33,7 @@ TOOL_LUA_LUA_MODULES =							\
 	o/$(MODE)/tool/net/largon2.o					\
 	o/$(MODE)/tool/net/lfetch.o					\
 	o/$(MODE)/tool/net/lgetopt.o					\
+	o/$(MODE)/tool/net/lzip.o					\
 	o/$(MODE)/third_party/lz4cli/lz4.o
 
 TOOL_LUA_DIRECTDEPS =							\
