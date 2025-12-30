@@ -90,7 +90,14 @@ $(TOOL_LUA_ASSETS): private ZIPOBJ_FLAGS += -C2
 tool/lua/.lua/definitions.lua: tool/net/definitions.lua
 	@cp $< $@
 
+# Copy embed module to .lua/cosmo/embed/ for embedding
+tool/lua/.lua/cosmo/embed/init.lua: tool/lua/embed/init.lua
+	@mkdir -p tool/lua/.lua/cosmo/embed
+	@cp $< $@
+
 o/$(MODE)/tool/lua/.lua/definitions.lua.zip.o: tool/lua/.lua/definitions.lua
+
+o/$(MODE)/tool/lua/.lua/cosmo/embed/init.lua.zip.o: tool/lua/.lua/cosmo/embed/init.lua
 
 o/$(MODE)/tool/lua/lua.dbg:						\
 		$(TOOL_LUA_DEPS)					\
