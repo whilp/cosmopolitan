@@ -209,5 +209,4 @@ end
 
 return {
   open = open,
-  create = czip.create,
 }
