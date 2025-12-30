@@ -6,6 +6,7 @@ local embed = {}
 
 local cosmo = require("cosmo")
 local unix = require("cosmo.unix")
+local path = require("cosmo.path")
 local zip = require("cosmo.zip")
 local luarocks = require("cosmo.embed.luarocks")
 
@@ -27,7 +28,7 @@ local function extract_lua_files_from_zip(zip_content)
   if not tmpdir then
     errorf("Failed to create temp directory")
   end
-  local tmpfile = tmpdir .. "/package.zip"
+  local tmpfile = path.join(tmpdir, "package.zip")
   local fd = unix.open(tmpfile, unix.O_WRONLY | unix.O_CREAT | unix.O_TRUNC, 0644)
   if not fd then
     unix.rmdir(tmpdir)

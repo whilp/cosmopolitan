@@ -1,12 +1,14 @@
 local unix = require("cosmo.unix")
 local cosmo = require("cosmo")
 local zip = require("cosmo.zip")
+local path = require("cosmo.path")
+local zipappend = require("cosmo.zip.append")
 
 local tmpdir = unix.mkdtemp("/tmp/test_embed_int_XXXXXX")
 assert(tmpdir, "failed to create temp dir")
 
 local function cleanup()
-  os.execute("rm -rf " .. tmpdir)
+  unix.rmrf(tmpdir)
 end
 
 local test_module_content = [[
@@ -22,27 +24,14 @@ end
 return M
 ]]
 
-local module_path = tmpdir .. "/test-module.lua"
-local zip_path = tmpdir .. "/test-package.zip"
-local output_path = tmpdir .. "/test-embedded-lua"
+local module_path = path.join(tmpdir, "test-module.lua")
+local zip_path = path.join(tmpdir, "test-package.zip")
+local output_path = path.join(tmpdir, "test-embedded-lua")
 
 local fd = unix.open(module_path, unix.O_WRONLY | unix.O_CREAT | unix.O_TRUNC, 0644)
 assert(fd, "failed to create test module")
 unix.write(fd, test_module_content)
 unix.close(fd)
-
-local function pack_u16(n)
-  return string.char(n & 0xFF, (n >> 8) & 0xFF)
-end
-
-local function pack_u32(n)
-  return string.char(
-    n & 0xFF,
-    (n >> 8) & 0xFF,
-    (n >> 16) & 0xFF,
-    (n >> 24) & 0xFF
-  )
-end
 
 fd = unix.open(module_path, unix.O_RDONLY)
 local stat = unix.fstat(fd)
@@ -54,48 +43,48 @@ local crc = cosmo.Crc32(0, content)
 
 local lfh =
   "\x50\x4B\x03\x04" ..
-  pack_u16(20) ..
-  pack_u16(0) ..
-  pack_u16(0) ..
-  pack_u16(0) ..
-  pack_u16(0) ..
-  pack_u32(crc) ..
-  pack_u32(#content) ..
-  pack_u32(#content) ..
-  pack_u16(#filename) ..
-  pack_u16(0)
+  zipappend.pack_u16(20) ..
+  zipappend.pack_u16(0) ..
+  zipappend.pack_u16(0) ..
+  zipappend.pack_u16(0) ..
+  zipappend.pack_u16(0) ..
+  zipappend.pack_u32(crc) ..
+  zipappend.pack_u32(#content) ..
+  zipappend.pack_u32(#content) ..
+  zipappend.pack_u16(#filename) ..
+  zipappend.pack_u16(0)
 
 local cfh =
   "\x50\x4B\x01\x02" ..
-  pack_u16((3 << 8) | 20) ..
-  pack_u16(20) ..
-  pack_u16(0) ..
-  pack_u16(0) ..
-  pack_u16(0) ..
-  pack_u16(0) ..
-  pack_u32(crc) ..
-  pack_u32(#content) ..
-  pack_u32(#content) ..
-  pack_u16(#filename) ..
-  pack_u16(0) ..
-  pack_u16(0) ..
-  pack_u16(0) ..
-  pack_u16(0) ..
-  pack_u32(0x81A40000) ..
-  pack_u32(0)
+  zipappend.pack_u16((3 << 8) | 20) ..
+  zipappend.pack_u16(20) ..
+  zipappend.pack_u16(0) ..
+  zipappend.pack_u16(0) ..
+  zipappend.pack_u16(0) ..
+  zipappend.pack_u16(0) ..
+  zipappend.pack_u32(crc) ..
+  zipappend.pack_u32(#content) ..
+  zipappend.pack_u32(#content) ..
+  zipappend.pack_u16(#filename) ..
+  zipappend.pack_u16(0) ..
+  zipappend.pack_u16(0) ..
+  zipappend.pack_u16(0) ..
+  zipappend.pack_u16(0) ..
+  zipappend.pack_u32(0x81A40000) ..
+  zipappend.pack_u32(0)
 
 local cdir_offset = #lfh + #filename + #content
 local cdir_size = #cfh + #filename
 
 local eocd =
   "\x50\x4B\x05\x06" ..
-  pack_u16(0) ..
-  pack_u16(0) ..
-  pack_u16(1) ..
-  pack_u16(1) ..
-  pack_u32(cdir_size) ..
-  pack_u32(cdir_offset) ..
-  pack_u16(0)
+  zipappend.pack_u16(0) ..
+  zipappend.pack_u16(0) ..
+  zipappend.pack_u16(1) ..
+  zipappend.pack_u16(1) ..
+  zipappend.pack_u32(cdir_size) ..
+  zipappend.pack_u32(cdir_offset) ..
+  zipappend.pack_u16(0)
 
 local zip_content = lfh .. filename .. content .. cfh .. filename .. eocd
 
@@ -108,11 +97,7 @@ local embed = require("cosmo.embed")
 assert(embed, "embed module should exist")
 assert(type(embed.install) == "function")
 
-local function get_executable_path()
-  return arg[-1] or arg[0]
-end
-
-local exe_path = get_executable_path()
+local exe_path = arg[-1] or arg[0]
 assert(exe_path, "failed to get executable path")
 
 local src_fd = unix.open(exe_path, unix.O_RDONLY)
@@ -148,7 +133,6 @@ local lua_content = zip_reader:read(entries[1])
 assert(lua_content, "failed to read entry from ZIP")
 zip_reader:close()
 
-local zipappend = require("cosmo.zip.append")
 local ok, err = zipappend.append(output_path, {
   [".lua/testmodule/init.lua"] = lua_content
 })
