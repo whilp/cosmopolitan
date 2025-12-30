@@ -2,25 +2,9 @@
 -- Provides unified open(path, mode) API with append ("a") support
 
 local cosmo = require("cosmo")
-local unix = require("cosmo.unix")
 
 -- Get the underlying C module
 local czip = package.loaded["cosmo.zip.c"] or require("cosmo.zip.c")
-
-
--- Helper functions for writing ZIP structures
-local function pack_u16(n)
-  return string.char(n & 0xFF, (n >> 8) & 0xFF)
-end
-
-local function pack_u32(n)
-  return string.char(
-    n & 0xFF,
-    (n >> 8) & 0xFF,
-    (n >> 16) & 0xFF,
-    (n >> 24) & 0xFF
-  )
-end
 
 -- Validate entry name (mirrors checks in lzip.c LuaZipWriterAdd)
 local function validate_name(name)
@@ -72,68 +56,8 @@ function Appender:add(name, content)
   table.insert(self._entries, {
     name = name,
     content = content,
-    crc = cosmo.Crc32(0, content),
   })
   return true
-end
-
-local function write_local_file_header(fd, name, content, crc)
-  local name_bytes = #name
-  local data_bytes = #content
-  local header =
-    "\x50\x4B\x03\x04" ..
-    pack_u16(20) ..       -- version needed
-    pack_u16(0) ..        -- flags
-    pack_u16(0) ..        -- compression method (store)
-    pack_u16(0) ..        -- mod time
-    pack_u16(0) ..        -- mod date
-    pack_u32(crc) ..
-    pack_u32(data_bytes) ..
-    pack_u32(data_bytes) ..
-    pack_u16(name_bytes) ..
-    pack_u16(0)           -- extra field length
-  unix.write(fd, header)
-  unix.write(fd, name)
-  unix.write(fd, content)
-  return 30 + name_bytes + data_bytes
-end
-
-local function write_central_dir_entry(fd, name, content_size, crc, offset)
-  local name_bytes = #name
-  local header =
-    "\x50\x4B\x01\x02" ..
-    pack_u16((3 << 8) | 20) ..  -- version made by (Unix, 2.0)
-    pack_u16(20) ..             -- version needed
-    pack_u16(0) ..              -- flags
-    pack_u16(0) ..              -- compression method
-    pack_u16(0) ..              -- mod time
-    pack_u16(0) ..              -- mod date
-    pack_u32(crc) ..
-    pack_u32(content_size) ..   -- compressed size
-    pack_u32(content_size) ..   -- uncompressed size
-    pack_u16(name_bytes) ..
-    pack_u16(0) ..              -- extra field length
-    pack_u16(0) ..              -- comment length
-    pack_u16(0) ..              -- disk number
-    pack_u16(0) ..              -- internal attrs
-    pack_u32(0x81A40000) ..     -- external attrs (regular file, 0644)
-    pack_u32(offset)
-  unix.write(fd, header)
-  unix.write(fd, name)
-  return 46 + name_bytes
-end
-
-local function write_eocd(fd, num_entries, cdir_size, cdir_offset)
-  local eocd =
-    "\x50\x4B\x05\x06" ..
-    pack_u16(0) ..            -- disk number
-    pack_u16(0) ..            -- disk with cdir
-    pack_u16(num_entries) ..  -- entries on this disk
-    pack_u16(num_entries) ..  -- total entries
-    pack_u32(cdir_size) ..
-    pack_u32(cdir_offset) ..
-    pack_u16(0)               -- comment length
-  unix.write(fd, eocd)
 end
 
 function Appender:close()
@@ -146,54 +70,64 @@ function Appender:close()
     return true
   end
 
-  local fd, owns_fd
+  -- fd mode not supported for append (requires reading existing content)
   if self._fd then
-    fd = self._fd
-    owns_fd = false
-  else
-    fd = unix.open(self._path, unix.O_WRONLY | unix.O_APPEND)
-    if not fd then
-      return nil, "failed to open file: " .. self._path
+    return nil, "append mode with file descriptor is not supported"
+  end
+
+  -- Read existing entries from the zip
+  local existing_entries = {}
+  local reader, err = czip.open(self._path)
+  if reader then
+    local names = reader:list()
+    if names then
+      for _, name in ipairs(names) do
+        local stat = reader:stat(name)
+        local content = reader:read(name)
+        if content and stat then
+          table.insert(existing_entries, {
+            name = name,
+            content = content,
+            mtime = stat.mtime,
+            mode = stat.mode,
+            method = stat.method == 0 and "store" or "deflate",
+          })
+        end
+      end
     end
-    owns_fd = true
+    reader:close()
+  end
+  -- If we couldn't read the file, it might be empty/new - that's ok
+
+  -- Create new zip with all entries (this truncates the file)
+  local writer, err = czip.create(self._path)
+  if not writer then
+    return nil, "failed to create zip: " .. tostring(err)
   end
 
-  local stat = unix.fstat(fd)
-  if not stat then
-    if owns_fd then unix.close(fd) end
-    return nil, "failed to stat file"
-  end
-
-  local offset = stat:size()
-  local written_entries = {}
-
-  for _, entry in ipairs(self._entries) do
-    local size = write_local_file_header(fd, entry.name, entry.content, entry.crc)
-    table.insert(written_entries, {
-      name = entry.name,
-      content_size = #entry.content,
-      crc = entry.crc,
-      offset = offset,
+  -- Add existing entries first
+  for _, entry in ipairs(existing_entries) do
+    local ok, err = writer:add(entry.name, entry.content, {
+      mtime = entry.mtime,
+      mode = entry.mode,
+      method = entry.method,
     })
-    offset = offset + size
+    if not ok then
+      writer:close()
+      return nil, "failed to re-add existing entry '" .. entry.name .. "': " .. tostring(err)
+    end
   end
 
-  local cdir_offset = offset
-  local cdir_size = 0
-  for _, entry in ipairs(written_entries) do
-    local size = write_central_dir_entry(
-      fd,
-      entry.name,
-      entry.content_size,
-      entry.crc,
-      entry.offset
-    )
-    cdir_size = cdir_size + size
+  -- Add new entries
+  for _, entry in ipairs(self._entries) do
+    local ok, err = writer:add(entry.name, entry.content)
+    if not ok then
+      writer:close()
+      return nil, "failed to add new entry '" .. entry.name .. "': " .. tostring(err)
+    end
   end
 
-  write_eocd(fd, #written_entries, cdir_size, cdir_offset)
-  if owns_fd then unix.close(fd) end
-  return true
+  return writer:close()
 end
 
 Appender.__close = Appender.close
@@ -220,18 +154,13 @@ local function open(path_or_fd, mode_or_opts, opts)
     return czip.create(path_or_fd, opts)
   elseif mode == "a" then
     if type(path_or_fd) == "number" then
-      return setmetatable({
-        _fd = path_or_fd,
-        _entries = {},
-        _closed = false,
-      }, Appender)
-    else
-      return setmetatable({
-        _path = path_or_fd,
-        _entries = {},
-        _closed = false,
-      }, Appender)
+      return nil, "append mode with file descriptor is not supported"
     end
+    return setmetatable({
+      _path = path_or_fd,
+      _entries = {},
+      _closed = false,
+    }, Appender)
   else
     return nil, "invalid mode: " .. tostring(mode) .. " (use 'r', 'w', or 'a')"
   end
