@@ -2,8 +2,6 @@
 -- Copyright 2025 Justine Alexandra Roberts Tunney
 -- SPDX-License-Identifier: ISC
 
-local embed = {}
-
 local cosmo = require("cosmo")
 local unix = require("cosmo.unix")
 local path = require("cosmo.path")
@@ -60,8 +58,8 @@ end
 
 local function normalize_paths(files, package_name)
   local normalized = {}
-  for path, content in pairs(files) do
-    local zippath = path
+  for filepath, content in pairs(files) do
+    local zippath = filepath
     zippath = zippath:gsub("^[^/]+/lua/", "")
     zippath = zippath:gsub("^lua/", "")
     if not zippath:match("^" .. package_name .. "/") and
@@ -104,7 +102,7 @@ local function copy_executable(src_path, dest_path)
   unix.close(dest_fd)
 end
 
-function embed.install(package_name, output_path)
+local function install(package_name, output_path)
   log("Installing package: " .. package_name)
 
   log("Finding package info...")
@@ -150,4 +148,6 @@ function embed.install(package_name, output_path)
   return true
 end
 
-return embed
+return {
+  install = install,
+}
