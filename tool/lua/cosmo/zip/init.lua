@@ -7,12 +7,6 @@ local unix = require("cosmo.unix")
 -- Get the underlying C module
 local czip = package.loaded["cosmo.zip.c"] or require("cosmo.zip.c")
 
-local M = {}
-
--- Copy all functions from C module
-for k, v in pairs(czip) do
-  M[k] = v
-end
 
 -- Helper functions for writing ZIP structures
 local function pack_u16(n)
@@ -213,6 +207,7 @@ local function open(path_or_fd, mode_or_opts, opts)
   end
 end
 
-M.open = open
-
-return M
+return {
+  open = open,
+  create = czip.create,
+}
