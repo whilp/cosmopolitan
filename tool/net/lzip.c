@@ -89,6 +89,16 @@ static int ZipError(lua_State *L, const char *msg) {
   return 2;
 }
 
+static int WriterSysError(lua_State *L, struct LuaZipWriter *w,
+                          const char *what) {
+  int saved_errno = errno;
+  if (w->path) {
+    unlink(w->path);
+  }
+  errno = saved_errno;
+  return SysError(L, what);
+}
+
 static uint8_t *FindEntry(struct LuaZipReader *z, const char *name,
                           size_t namelen) {
   int64_t i, got, hdrsize;
@@ -730,7 +740,7 @@ static int LuaZipWriterAdd(lua_State *L) {
   if (written != (ssize_t)hdrlen) {
     if (compdata)
       free(compdata);
-    return SysError(L, "write header");
+    return WriterSysError(L, w, "write header");
   }
 
   // write file data
@@ -739,7 +749,7 @@ static int LuaZipWriterAdd(lua_State *L) {
   if (compdata)
     free(compdata);
   if (written != (ssize_t)compsize)
-    return SysError(L, "write data");
+    return WriterSysError(L, w, "write data");
 
   // record entry for central directory
   if (AddCdirEntry(w, name, namelen, w->offset, compsize, contentlen, crc,
@@ -815,7 +825,7 @@ static int LuaZipWriterClose(lua_State *L) {
     ssize_t written = write(w->fd, cdirhdr, hdrlen);
     free(cdirhdr);
     if (written != (ssize_t)hdrlen)
-      return SysError(L, "write cdir entry");
+      return WriterSysError(L, w, "write cdir entry");
 
     cdir_size += hdrlen;
   }
@@ -841,7 +851,7 @@ static int LuaZipWriterClose(lua_State *L) {
     p = ZIP_WRITE64(p, cdir_offset);
 
     if (write(w->fd, eocd64, sizeof(eocd64)) != sizeof(eocd64))
-      return SysError(L, "write eocd64");
+      return WriterSysError(L, w, "write eocd64");
 
     // write zip64 end of central directory locator
     uint8_t loc64[kZipCdir64LocatorSize];
@@ -852,7 +862,7 @@ static int LuaZipWriterClose(lua_State *L) {
     p = ZIP_WRITE32(p, 1);  // total disks
 
     if (write(w->fd, loc64, sizeof(loc64)) != sizeof(loc64))
-      return SysError(L, "write loc64");
+      return WriterSysError(L, w, "write loc64");
   }
 
   // write end of central directory record
@@ -868,7 +878,7 @@ static int LuaZipWriterClose(lua_State *L) {
   p = ZIP_WRITE16(p, 0);  // comment length
 
   if (write(w->fd, eocd, sizeof(eocd)) != sizeof(eocd))
-    return SysError(L, "write eocd");
+    return WriterSysError(L, w, "write eocd");
 
   // cleanup - set fd to -1 before close to prevent double-close in GC
   int fd = w->fd;
