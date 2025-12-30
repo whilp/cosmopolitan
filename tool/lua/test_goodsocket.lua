@@ -1,3 +1,4 @@
+local cosmo = require("cosmo")
 local gs = require("cosmo.goodsocket")
 local unix = require("cosmo.unix")
 
@@ -211,11 +212,7 @@ assert(fd, "failed to create socket: " .. tostring(err))
 
 -- Try to bind it (this tests that it's a real socket)
 -- We use port 0 to let the OS assign a port
-local ok, bind_err = unix.bind(fd, {
-  family = gs.AF_INET,
-  addr = "127.0.0.1",
-  port = 0
-})
+local ok, bind_err = unix.bind(fd, cosmo.ParseIp("127.0.0.1"), 0)
 if ok then
   -- If bind succeeds, the socket is valid
   assert(unix.close(fd), "should be able to close bound socket")
@@ -254,11 +251,7 @@ local server_fd, server_err = gs.socket(gs.AF_INET, gs.SOCK_STREAM, gs.IPPROTO_T
 assert(server_fd, "failed to create server socket: " .. tostring(server_err))
 
 -- Bind to localhost on a random port
-ok, err = unix.bind(server_fd, {
-  family = gs.AF_INET,
-  addr = "127.0.0.1",
-  port = 0
-})
+ok, err = unix.bind(server_fd, cosmo.ParseIp("127.0.0.1"), 0)
 
 if ok then
   -- If bind succeeds, try to listen

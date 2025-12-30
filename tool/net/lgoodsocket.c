@@ -62,8 +62,8 @@ static int LuaGoodSocketSocket(lua_State *L) {
 
   if (!lua_isnoneornil(L, 5)) {
     lua_Number timeout_num = luaL_checknumber(L, 5);
-    tv.tv_sec = (time_t)timeout_num;
-    tv.tv_usec = (suseconds_t)((timeout_num - tv.tv_sec) * 1000000);
+    tv.tv_sec = (int64_t)timeout_num;
+    tv.tv_usec = (int64_t)((timeout_num - tv.tv_sec) * 1000000);
     timeout_ptr = &tv;
   }
 
