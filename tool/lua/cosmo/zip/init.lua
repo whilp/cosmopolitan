@@ -22,6 +22,29 @@ local function pack_u32(n)
   )
 end
 
+-- Validate entry name (mirrors checks in lzip.c LuaZipWriterAdd)
+local function validate_name(name)
+  if type(name) ~= "string" then
+    return nil, "name must be a string"
+  end
+  if #name == 0 then
+    return nil, "name cannot be empty"
+  end
+  if #name > 65535 then
+    return nil, "name too long"
+  end
+  if name:find("\0") then
+    return nil, "name contains null byte"
+  end
+  if name:sub(1, 1) == "/" then
+    return nil, "unsafe path (starts with '/')"
+  end
+  if not cosmo.IsReasonablePath(name) then
+    return nil, "unsafe path (contains '..' or '.')"
+  end
+  return true
+end
+
 -- Appender metatable
 local Appender = {}
 Appender.__index = Appender
@@ -38,6 +61,13 @@ end
 function Appender:add(name, content)
   if self._closed then
     return nil, "appender is closed"
+  end
+  local ok, err = validate_name(name)
+  if not ok then
+    return nil, err
+  end
+  if type(content) ~= "string" then
+    return nil, "content must be a string"
   end
   table.insert(self._entries, {
     name = name,
