@@ -6421,9 +6421,11 @@ function unix.socketpair(family, type, protocol) end
 
 ---  Binds socket.
 ---
----  `ip` and `port` are in host endian order. For example, if you
----  wanted to listen on `1.2.3.4:31337` you could do any of these
+---  `ip` can be a string (e.g., "1.2.3.4") or an integer in host endian order.
+---  `port` is in host endian order. For example, if you wanted to listen on
+---  `1.2.3.4:31337` you could do any of these:
 ---
+---      unix.bind(sock, '1.2.3.4', 31337)         -- NEW: string IP (most intuitive)
 ---      unix.bind(sock, 0x01020304, 31337)
 ---      unix.bind(sock, ParseIp('1.2.3.4'), 31337)
 ---      unix.bind(sock, 1 << 24 | 0 << 16 | 0 << 8 | 1, 31337)
@@ -6446,11 +6448,12 @@ function unix.socketpair(family, type, protocol) end
 ---  Further note that calling `unix.bind(sock)` is equivalent to not
 ---  calling bind() at all, since the above behavior is the default.
 ---@param fd integer
----@param ip? uint32
+---@param ip? uint32|string
 ---@param port? uint16
 ---@return true
+---@overload fun(fd: integer, ip: string, port?: integer): true
 ---@overload fun(fd: integer, unixpath: string): true
----@overload fun(fd: integer, ip?: integer, port?: integer): nil, error: unix.Errno
+---@overload fun(fd: integer, ip?: integer|string, port?: integer): nil, error: unix.Errno
 ---@overload fun(fd: integer, unixpath: string): nil, error: unix.Errno
 function unix.bind(fd, ip, port) end
 
@@ -6755,11 +6758,13 @@ function unix.accept(serverfd, flags) end
 ---  With TCP this is a blocking operation. For a UDP socket it simply
 ---  remembers the intended address so that `send()` or `write()` may be used
 ---  rather than `sendto()`.
+---
+---  `ip` can be a string (e.g., "1.2.3.4") or an integer in host endian order.
 ---@param fd integer
----@param ip uint32
+---@param ip uint32|string
 ---@param port uint16
 ---@return true
----@overload fun(fd:integer, ip:integer, port:integer): nil, unix.Errno
+---@overload fun(fd:integer, ip:integer|string, port:integer): nil, unix.Errno
 ---@overload fun(fd:integer, unixpath:string): true
 ---@overload fun(fd:integer, unixpath:string): nil, unix.Errno
 function unix.connect(fd, ip, port) end

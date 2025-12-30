@@ -103,6 +103,7 @@
 #include "libc/thread/thread.h"
 #include "libc/time.h"
 #include "libc/x/x.h"
+#include "net/http/ip.h"
 #include "third_party/lua/cosmo.h"
 #include "third_party/lua/lauxlib.h"
 #include "third_party/lua/lgc.h"
@@ -248,22 +249,37 @@ static int SysretInteger(lua_State *L, const char *call, int olderr,
 static int MakeSockaddr(lua_State *L, int i, struct sockaddr_storage *ss,
                         uint32_t *salen) {
   bzero(ss, sizeof(*ss));
-  if (!lua_isinteger(L, i)) {
-    ((struct sockaddr_un *)ss)->sun_family = AF_UNIX;
-    if (!memccpy(((struct sockaddr_un *)ss)->sun_path, luaL_checkstring(L, i),
-                 0, sizeof(((struct sockaddr_un *)ss)->sun_path))) {
-      luaL_error(L, "unix path too long");
-      __builtin_unreachable();
-    }
-    *salen = sizeof(struct sockaddr_un);
-    return i + 1;
-  } else {
+  if (lua_isinteger(L, i)) {
+    // Integer IP address (existing behavior)
     ((struct sockaddr_in *)ss)->sin_family = AF_INET;
     ((struct sockaddr_in *)ss)->sin_addr.s_addr =
         htonl(luaL_optinteger(L, i, 0));
     ((struct sockaddr_in *)ss)->sin_port = htons(luaL_optinteger(L, i + 1, 0));
     *salen = sizeof(struct sockaddr_in);
     return i + 2;
+  } else {
+    // String: try to parse as IP address first
+    size_t len;
+    const char *str = luaL_checklstring(L, i, &len);
+    int64_t ip = ParseIp(str, len);
+    if (ip >= 0) {
+      // Valid IP address string
+      ((struct sockaddr_in *)ss)->sin_family = AF_INET;
+      ((struct sockaddr_in *)ss)->sin_addr.s_addr = htonl(ip);
+      ((struct sockaddr_in *)ss)->sin_port = htons(luaL_optinteger(L, i + 1, 0));
+      *salen = sizeof(struct sockaddr_in);
+      return i + 2;
+    } else {
+      // Not an IP address, treat as Unix socket path
+      ((struct sockaddr_un *)ss)->sun_family = AF_UNIX;
+      if (!memccpy(((struct sockaddr_un *)ss)->sun_path, str,
+                   0, sizeof(((struct sockaddr_un *)ss)->sun_path))) {
+        luaL_error(L, "unix path too long");
+        __builtin_unreachable();
+      }
+      *salen = sizeof(struct sockaddr_un);
+      return i + 1;
+    }
   }
 }
 
