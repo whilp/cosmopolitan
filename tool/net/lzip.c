@@ -987,9 +987,44 @@ static const luaL_Reg kLuaZipWriterMethods[] = {
     {0},
 };
 
+// zip.validate_name(name) -> true | nil, error
+// Validates a zip entry name without adding it to an archive
+static int LuaZipValidateName(lua_State *L) {
+  size_t namelen;
+  const char *name = luaL_checklstring(L, 1, &namelen);
+
+  if (namelen == 0) {
+    lua_pushnil(L);
+    lua_pushliteral(L, "name cannot be empty");
+    return 2;
+  }
+
+  if (namelen > 65535) {
+    lua_pushnil(L);
+    lua_pushliteral(L, "name too long");
+    return 2;
+  }
+
+  if (memchr(name, '\0', namelen)) {
+    lua_pushnil(L);
+    lua_pushliteral(L, "name contains null byte");
+    return 2;
+  }
+
+  if (IsUnsafePath(name, namelen)) {
+    lua_pushnil(L);
+    lua_pushliteral(L, "unsafe path (contains '..' or starts with '/')");
+    return 2;
+  }
+
+  lua_pushboolean(L, 1);
+  return 1;
+}
+
 static const luaL_Reg kLuaZip[] = {
     {"open", LuaZipOpen},
     {"create", LuaZipCreate},
+    {"validate_name", LuaZipValidateName},
     {0},
 };
 

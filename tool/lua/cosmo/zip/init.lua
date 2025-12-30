@@ -1,33 +1,8 @@
 -- cosmo.zip wrapper
 -- Provides unified open(path, mode) API with append ("a") support
 
-local cosmo = require("cosmo")
-
 -- Get the underlying C module
 local czip = package.loaded["cosmo.zip.c"] or require("cosmo.zip.c")
-
--- Validate entry name (mirrors checks in lzip.c LuaZipWriterAdd)
-local function validate_name(name)
-  if type(name) ~= "string" then
-    return nil, "name must be a string"
-  end
-  if #name == 0 then
-    return nil, "name cannot be empty"
-  end
-  if #name > 65535 then
-    return nil, "name too long"
-  end
-  if name:find("\0") then
-    return nil, "name contains null byte"
-  end
-  if name:sub(1, 1) == "/" then
-    return nil, "unsafe path (starts with '/')"
-  end
-  if not cosmo.IsReasonablePath(name) then
-    return nil, "unsafe path (contains '..' or '.')"
-  end
-  return true
-end
 
 -- Appender metatable
 local Appender = {}
@@ -46,7 +21,7 @@ function Appender:add(name, content)
   if self._closed then
     return nil, "appender is closed"
   end
-  local ok, err = validate_name(name)
+  local ok, err = czip.validate_name(name)
   if not ok then
     return nil, err
   end
