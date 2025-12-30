@@ -491,6 +491,19 @@ static bool IsUnsafePath(const char *name, size_t namelen) {
   return false;
 }
 
+// Returns NULL if name is valid, or an error message if invalid
+static const char *ValidateEntryName(const char *name, size_t namelen) {
+  if (namelen == 0)
+    return "name cannot be empty";
+  if (namelen > 65535)
+    return "name too long";
+  if (memchr(name, '\0', namelen))
+    return "name contains null byte";
+  if (IsUnsafePath(name, namelen))
+    return "unsafe path (contains '..' or starts with '/')";
+  return NULL;
+}
+
 static void GetDosLocalTime(int64_t utcunixts, uint16_t *out_time,
                             uint16_t *out_date) {
   struct tm tm;
@@ -604,17 +617,9 @@ static int LuaZipWriterAdd(lua_State *L) {
   if (w->fd == -1)
     return ZipError(L, "zip writer is closed");
 
-  if (namelen == 0)
-    return ZipError(L, "name cannot be empty");
-
-  if (namelen > 65535)
-    return ZipError(L, "name too long");
-
-  if (memchr(name, '\0', namelen))
-    return ZipError(L, "name contains null byte");
-
-  if (IsUnsafePath(name, namelen))
-    return ZipError(L, "unsafe path (contains '..' or starts with '/')");
+  const char *name_err = ValidateEntryName(name, namelen);
+  if (name_err)
+    return ZipError(L, name_err);
 
   if (HasDuplicateEntry(w, name, namelen))
     return ZipError(L, "duplicate entry name");
@@ -992,31 +997,12 @@ static const luaL_Reg kLuaZipWriterMethods[] = {
 static int LuaZipValidateName(lua_State *L) {
   size_t namelen;
   const char *name = luaL_checklstring(L, 1, &namelen);
-
-  if (namelen == 0) {
+  const char *err = ValidateEntryName(name, namelen);
+  if (err) {
     lua_pushnil(L);
-    lua_pushliteral(L, "name cannot be empty");
+    lua_pushstring(L, err);
     return 2;
   }
-
-  if (namelen > 65535) {
-    lua_pushnil(L);
-    lua_pushliteral(L, "name too long");
-    return 2;
-  }
-
-  if (memchr(name, '\0', namelen)) {
-    lua_pushnil(L);
-    lua_pushliteral(L, "name contains null byte");
-    return 2;
-  }
-
-  if (IsUnsafePath(name, namelen)) {
-    lua_pushnil(L);
-    lua_pushliteral(L, "unsafe path (contains '..' or starts with '/')");
-    return 2;
-  }
-
   lua_pushboolean(L, 1);
   return 1;
 }
