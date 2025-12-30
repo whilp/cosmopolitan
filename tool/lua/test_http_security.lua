@@ -229,3 +229,7 @@ test_special_chars_in_token()
 print("  [PASS] Invalid token characters rejected")
 
 print("all http security tests passed")
+
+-- Explicit cleanup to avoid segfault on exit
+collectgarbage("collect")
+collectgarbage("collect")

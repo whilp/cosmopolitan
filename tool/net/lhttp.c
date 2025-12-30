@@ -216,10 +216,15 @@ static int LuaHttpFormatResponse(lua_State *L) {
   int nparts = 1;
 
   // Headers - collect all header strings
+  // First pass: validate all headers before pushing any to the stack
+  // This avoids leaving the stack in a bad state if we need to error
   lua_getfield(L, 1, "headers");
   if (lua_istable(L, -1)) {
     int headers_idx = lua_gettop(L);
     int header_count = 0;
+    const char *error_msg = NULL;
+
+    // Validation pass
     lua_pushnil(L);
     while (lua_next(L, headers_idx)) {
       size_t key_len, val_len;
@@ -228,14 +233,34 @@ static int LuaHttpFormatResponse(lua_State *L) {
       lua_pop(L, 1);
       if (key && val) {
         if (!IsValidHttpHeaderName(key, key_len)) {
-          return luaL_error(L, "invalid header name: contains invalid characters");
+          error_msg = "invalid header name: contains invalid characters";
+          lua_pop(L, 1);  // pop key to end iteration
+          break;
         }
         if (!IsValidHttpHeaderValue(val, val_len)) {
-          return luaL_error(L, "invalid header value: contains CR/LF or control characters");
+          error_msg = "invalid header value: contains CR/LF or control characters";
+          lua_pop(L, 1);
+          break;
         }
         if (++header_count > HTTP_MAX_HEADERS) {
-          return luaL_error(L, "too many headers (max %d)", HTTP_MAX_HEADERS);
+          error_msg = "too many headers (max 100)";
+          lua_pop(L, 1);
+          break;
         }
+      }
+    }
+    if (error_msg) {
+      return luaL_error(L, "%s", error_msg);
+    }
+
+    // Collection pass - now safe to push strings
+    lua_pushnil(L);
+    while (lua_next(L, headers_idx)) {
+      size_t key_len, val_len;
+      const char *key = lua_tolstring(L, -2, &key_len);
+      const char *val = lua_tolstring(L, -1, &val_len);
+      lua_pop(L, 1);
+      if (key && val) {
         lua_pushfstring(L, "%s: %s\r\n", key, val);
         lua_insert(L, headers_idx);
         headers_idx++;
@@ -288,10 +313,14 @@ static int LuaHttpFormatRequest(lua_State *L) {
   int nparts = 1;
 
   // Headers - collect all header strings
+  // First pass: validate all headers before pushing any to the stack
   lua_getfield(L, 1, "headers");
   if (lua_istable(L, -1)) {
     int headers_idx = lua_gettop(L);
     int header_count = 0;
+    const char *error_msg = NULL;
+
+    // Validation pass
     lua_pushnil(L);
     while (lua_next(L, headers_idx)) {
       size_t key_len, val_len;
@@ -300,14 +329,34 @@ static int LuaHttpFormatRequest(lua_State *L) {
       lua_pop(L, 1);
       if (key && val) {
         if (!IsValidHttpHeaderName(key, key_len)) {
-          return luaL_error(L, "invalid header name: contains invalid characters");
+          error_msg = "invalid header name: contains invalid characters";
+          lua_pop(L, 1);
+          break;
         }
         if (!IsValidHttpHeaderValue(val, val_len)) {
-          return luaL_error(L, "invalid header value: contains CR/LF or control characters");
+          error_msg = "invalid header value: contains CR/LF or control characters";
+          lua_pop(L, 1);
+          break;
         }
         if (++header_count > HTTP_MAX_HEADERS) {
-          return luaL_error(L, "too many headers (max %d)", HTTP_MAX_HEADERS);
+          error_msg = "too many headers (max 100)";
+          lua_pop(L, 1);
+          break;
         }
+      }
+    }
+    if (error_msg) {
+      return luaL_error(L, "%s", error_msg);
+    }
+
+    // Collection pass - now safe to push strings
+    lua_pushnil(L);
+    while (lua_next(L, headers_idx)) {
+      size_t key_len, val_len;
+      const char *key = lua_tolstring(L, -2, &key_len);
+      const char *val = lua_tolstring(L, -1, &val_len);
+      lua_pop(L, 1);
+      if (key && val) {
         lua_pushfstring(L, "%s: %s\r\n", key, val);
         lua_insert(L, headers_idx);
         headers_idx++;
