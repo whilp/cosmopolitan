@@ -79,20 +79,20 @@ o/$(MODE)/tool/lua/lua.main.o: third_party/lua/lua.main.c
 	@$(COMPILE) -AOBJECTIFY.c $(OBJECTIFY.c) $(OUTPUT_OPTION) -DLUA_COSMO $<
 
 TOOL_LUA_ASSETS =							\
-	o/$(MODE)/tool/lua/.lua/definitions.lua.zip.o			\
+	o/$(MODE)/tool/lua/definitions.lua.zip.o			\
 	o/$(MODE)/tool/lua/cosmo/help/init.lua.zip.o			\
 	o/$(MODE)/tool/lua/cosmo/skill/init.lua.zip.o			\
 	o/$(MODE)/tool/lua/cosmo/http.lua.zip.o
 
-# Strip tool/lua/ prefix so files end up at /zip/.lua/
-o/$(MODE)/tool/lua/.lua/%.zip.o: private ZIPOBJ_FLAGS += -C2
+# Strip tool/lua/ prefix and prepend .lua/ so files end up at /zip/.lua/
+o/$(MODE)/tool/lua/definitions.lua.zip.o: private ZIPOBJ_FLAGS += -C2 -P.lua
 o/$(MODE)/tool/lua/cosmo/%.zip.o: private ZIPOBJ_FLAGS += -C2 -P.lua
 
-# Copy base definitions.lua to .lua/ for embedding
-tool/lua/.lua/definitions.lua: tool/net/definitions.lua
+# Copy base definitions.lua for embedding
+tool/lua/definitions.lua: tool/net/definitions.lua
 	@cp $< $@
 
-o/$(MODE)/tool/lua/.lua/definitions.lua.zip.o: tool/lua/.lua/definitions.lua
+o/$(MODE)/tool/lua/definitions.lua.zip.o: tool/lua/definitions.lua
 
 o/$(MODE)/tool/lua/lua.dbg:						\
 		$(TOOL_LUA_DEPS)					\
