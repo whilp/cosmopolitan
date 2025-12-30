@@ -135,8 +135,16 @@ o/$(MODE)/tool/lua/test_lz4.ok: o/$(MODE)/tool/lua/lua.dbg tool/lua/test_lz4.lua
 	$< tool/lua/test_lz4.lua
 	@touch $@
 
-o/$(MODE)/tool/lua/test_zip.ok: o/$(MODE)/tool/lua/lua.dbg tool/lua/test_zip.lua
-	$< tool/lua/test_zip.lua
+o/$(MODE)/tool/lua/cosmo/zip/test.ok: o/$(MODE)/tool/lua/lua.dbg tool/lua/cosmo/zip/test.lua
+	$< tool/lua/cosmo/zip/test.lua
+	@touch $@
+
+o/$(MODE)/tool/lua/cosmo/zip/test_append.ok: o/$(MODE)/tool/lua/lua.dbg tool/lua/cosmo/zip/test_append.lua
+	$< tool/lua/cosmo/zip/test_append.lua
+	@touch $@
+
+o/$(MODE)/tool/lua/cosmo/zip/test_security.ok: o/$(MODE)/tool/lua/lua.dbg tool/lua/cosmo/zip/test_security.lua
+	$< tool/lua/cosmo/zip/test_security.lua
 	@touch $@
 
 o/$(MODE)/tool/lua/cosmo/http/test.ok: o/$(MODE)/tool/lua/lua.dbg tool/lua/cosmo/http/test.lua
@@ -163,7 +171,9 @@ TOOL_LUA_TESTS =							\
 	o/$(MODE)/tool/lua/test_getopt.ok				\
 	o/$(MODE)/tool/lua/test_lz4.ok					\
 	o/$(MODE)/tool/lua/test_strftime.ok				\
-	o/$(MODE)/tool/lua/test_zip.ok					\
+	o/$(MODE)/tool/lua/cosmo/zip/test.ok				\
+	o/$(MODE)/tool/lua/cosmo/zip/test_append.ok			\
+	o/$(MODE)/tool/lua/cosmo/zip/test_security.ok			\
 	o/$(MODE)/tool/lua/cosmo/http/test.ok				\
 	o/$(MODE)/tool/lua/cosmo/http/test_server.ok			\
 	o/$(MODE)/tool/lua/cosmo/http/test_security.ok			\
