@@ -17,20 +17,21 @@
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include "tool/net/lhttp.h"
+#include "libc/calls/calls.h"
+#include "libc/calls/struct/timeval.h"
+#include "libc/errno.h"
+#include "libc/mem/mem.h"
 #include "libc/serialize.h"
 #include "libc/sock/sock.h"
-#include "libc/sock/struct/sockaddr.h"
 #include "libc/sock/struct/pollfd.h"
+#include "libc/sock/struct/sockaddr.h"
+#include "libc/str/str.h"
 #include "libc/sysv/consts/af.h"
 #include "libc/sysv/consts/ipproto.h"
 #include "libc/sysv/consts/poll.h"
 #include "libc/sysv/consts/so.h"
 #include "libc/sysv/consts/sock.h"
 #include "libc/sysv/consts/sol.h"
-#include "libc/calls/calls.h"
-#include "libc/errno.h"
-#include "libc/mem/mem.h"
-#include "libc/str/str.h"
 #include "net/http/http.h"
 #include "third_party/lua/cosmo.h"
 #include "third_party/lua/lauxlib.h"
@@ -345,12 +346,14 @@ static int ParseAddr(const char *addr, uint32_t *ip, uint16_t *port) {
 //   addr: address string (required)
 //   reuseaddr: boolean (default true)
 //   backlog: int (default 128)
+//   timeout: request timeout in seconds (default 30)
 //
 static int LuaHttpServe(lua_State *L) {
   uint32_t ip = 0;
   uint16_t port = 0;
   int reuseaddr = 1;
   int backlog = 128;
+  int timeout_sec = 30;
   int handler_idx;
 
   // Parse arguments
@@ -372,6 +375,12 @@ static int LuaHttpServe(lua_State *L) {
     lua_getfield(L, 1, "backlog");
     if (!lua_isnil(L, -1)) {
       backlog = luaL_checkinteger(L, -1);
+    }
+    lua_pop(L, 1);
+
+    lua_getfield(L, 1, "timeout");
+    if (!lua_isnil(L, -1)) {
+      timeout_sec = luaL_checkinteger(L, -1);
     }
     lua_pop(L, 1);
 
@@ -432,6 +441,12 @@ static int LuaHttpServe(lua_State *L) {
       free(buf);
       close(fd);
       return luaL_error(L, "accept: %s", strerror(errno));
+    }
+
+    // Set receive timeout on client socket
+    if (timeout_sec > 0) {
+      struct timeval tv = {.tv_sec = timeout_sec, .tv_usec = 0};
+      setsockopt(client, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
     }
 
     // Read request

@@ -81,7 +81,8 @@ o/$(MODE)/tool/lua/lua.main.o: third_party/lua/lua.main.c
 TOOL_LUA_ASSETS =							\
 	o/$(MODE)/tool/lua/.lua/definitions.lua.zip.o			\
 	o/$(MODE)/tool/lua/.lua/cosmo/help/init.lua.zip.o		\
-	o/$(MODE)/tool/lua/.lua/cosmo/skill/init.lua.zip.o
+	o/$(MODE)/tool/lua/.lua/cosmo/skill/init.lua.zip.o		\
+	o/$(MODE)/tool/lua/.lua/cosmo/http.lua.zip.o
 
 # Strip tool/lua/ prefix so files end up at /zip/.lua/
 $(TOOL_LUA_ASSETS): private ZIPOBJ_FLAGS += -C2
@@ -140,6 +141,10 @@ o/$(MODE)/tool/lua/test_http.ok: o/$(MODE)/tool/lua/lua.dbg tool/lua/test_http.l
 	$< tool/lua/test_http.lua
 	@touch $@
 
+o/$(MODE)/tool/lua/test_http_server.ok: o/$(MODE)/tool/lua/lua.dbg tool/lua/test_http_server.lua
+	$< tool/lua/test_http_server.lua
+	@touch $@
+
 TOOL_LUA_TESTS =							\
 	o/$(MODE)/tool/lua/test_cosmo.ok				\
 	o/$(MODE)/tool/lua/test_help.ok					\
@@ -149,7 +154,8 @@ TOOL_LUA_TESTS =							\
 	o/$(MODE)/tool/lua/test_lz4.ok					\
 	o/$(MODE)/tool/lua/test_strftime.ok				\
 	o/$(MODE)/tool/lua/test_zip.ok					\
-	o/$(MODE)/tool/lua/test_http.ok
+	o/$(MODE)/tool/lua/test_http.ok					\
+	o/$(MODE)/tool/lua/test_http_server.ok
 
 .PHONY: o/$(MODE)/tool/lua
 o/$(MODE)/tool/lua:							\
