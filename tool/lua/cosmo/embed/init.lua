@@ -183,11 +183,23 @@ local function install(package_name, output_path)
   copy_executable(exe_path, output_path)
 
   log("Embedding files...")
-  local zipappend = require("cosmo.zip.append")
-  local ok, err = pcall(zipappend.append, output_path, normalized)
+  local appender, err = zip.open(output_path, "a")
+  if not appender then
+    unix.unlink(output_path)
+    errorf("Failed to open for append: %s", err)
+  end
+  for zippath, content in pairs(normalized) do
+    local ok, add_err = appender:add(zippath, content)
+    if not ok then
+      appender:close()
+      unix.unlink(output_path)
+      errorf("Failed to add %s: %s", zippath, add_err)
+    end
+  end
+  local ok, close_err = appender:close()
   if not ok then
     unix.unlink(output_path)
-    errorf("Failed to append files: %s", err)
+    errorf("Failed to close appender: %s", close_err)
   end
 
   log("Success! Created: " .. output_path)

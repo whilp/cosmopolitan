@@ -70,24 +70,6 @@ expect_error(luarocks.validate_package_name, "foo?bar")
 expect_error(luarocks.validate_package_name, "1invalid")
 expect_error(luarocks.validate_package_name, string.rep("a", 100))
 
-local zipappend = require("cosmo.zip.append")
-assert(zipappend, "zip.append module should exist")
-assert(type(zipappend.append) == "function")
-assert(type(zipappend.pack_u16) == "function")
-assert(type(zipappend.pack_u32) == "function")
-
-local packed = zipappend.pack_u16(0x1234)
-assert(#packed == 2, "pack_u16 should produce 2 bytes")
-assert(packed:byte(1) == 0x34, "pack_u16 byte 1")
-assert(packed:byte(2) == 0x12, "pack_u16 byte 2")
-
-packed = zipappend.pack_u32(0x12345678)
-assert(#packed == 4, "pack_u32 should produce 4 bytes")
-assert(packed:byte(1) == 0x78, "pack_u32 byte 1")
-assert(packed:byte(2) == 0x56, "pack_u32 byte 2")
-assert(packed:byte(3) == 0x34, "pack_u32 byte 3")
-assert(packed:byte(4) == 0x12, "pack_u32 byte 4")
-
 local rockspec_content = [[
 package = "testpkg"
 version = "1.0-1"
