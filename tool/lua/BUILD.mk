@@ -84,7 +84,9 @@ TOOL_LUA_ASSETS =							\
 	o/$(MODE)/tool/lua/cosmo/help/init.lua.zip.o			\
 	o/$(MODE)/tool/lua/cosmo/skill/init.lua.zip.o			\
 	o/$(MODE)/tool/lua/cosmo/zip/init.lua.zip.o			\
-	o/$(MODE)/tool/lua/cosmo/http/init.lua.zip.o
+	o/$(MODE)/tool/lua/cosmo/http/init.lua.zip.o			\
+	o/$(MODE)/tool/lua/cosmo/embed/init.lua.zip.o			\
+	o/$(MODE)/tool/lua/cosmo/embed/luarocks.lua.zip.o
 
 # Strip tool/lua/ prefix and prepend .lua/ so files end up at /zip/.lua/
 o/$(MODE)/tool/lua/cosmo/%.zip.o: private ZIPOBJ_FLAGS += -C2 -P.lua
