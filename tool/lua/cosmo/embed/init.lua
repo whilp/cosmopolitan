@@ -21,38 +21,58 @@ local function get_executable_path()
   return arg[-1] or arg[0] or error("Cannot determine executable path")
 end
 
+local function is_safe_path(filepath)
+  -- Prevent directory traversal - path must stay within target directory
+  if filepath:match("%.%.") then
+    return false, "path traversal not allowed"
+  end
+  if filepath:match("^/") then
+    return false, "absolute path not allowed"
+  end
+  return true
+end
+
 local function extract_lua_files_from_zip(zip_content)
   local tmpdir = unix.mkdtemp("/tmp/cosmo-embed-XXXXXX")
   if not tmpdir then
     errorf("Failed to create temp directory")
   end
   local tmpfile = path.join(tmpdir, "package.zip")
-  local fd = unix.open(tmpfile, unix.O_WRONLY | unix.O_CREAT | unix.O_TRUNC, 0644)
+  -- Use restrictive permissions for temp files (0600)
+  local fd = unix.open(tmpfile, unix.O_WRONLY | unix.O_CREAT | unix.O_TRUNC, 0600)
   if not fd then
-    unix.rmdir(tmpdir)
+    unix.rmrf(tmpdir)
     errorf("Failed to create temp file")
   end
-  unix.write(fd, zip_content)
+  local written, write_err = unix.write(fd, zip_content)
+  if not written then
+    unix.close(fd)
+    unix.rmrf(tmpdir)
+    errorf("Failed to write temp file: %s", write_err or "unknown error")
+  end
   unix.close(fd)
   local reader, err = zip.open(tmpfile)
   if not reader then
-    unix.unlink(tmpfile)
-    unix.rmdir(tmpdir)
+    unix.rmrf(tmpdir)
     errorf("Failed to open ZIP: %s", err)
   end
   local files = {}
   local entries = reader:list()
   for _, entry in ipairs(entries) do
     if entry:match("%.lua$") and not entry:match("/$") then
-      local content, read_err = reader:read(entry)
-      if content then
-        files[entry] = content
+      local safe, reason = is_safe_path(entry)
+      if not safe then
+        log("WARNING: Skipping unsafe path '" .. entry .. "': " .. reason)
+      else
+        local content, read_err = reader:read(entry)
+        if content then
+          files[entry] = content
+        end
       end
     end
   end
   reader:close()
-  unix.unlink(tmpfile)
-  unix.rmdir(tmpdir)
+  unix.rmrf(tmpdir)
   return files
 end
 
@@ -69,12 +89,27 @@ local function normalize_paths(files, package_name)
     if not zippath:match("^%.lua/") then
       zippath = ".lua/" .. zippath
     end
-    normalized[zippath] = content
+    -- Final safety check on normalized path
+    local safe, reason = is_safe_path(zippath:gsub("^%.lua/", ""))
+    if not safe then
+      log("WARNING: Skipping unsafe normalized path '" .. zippath .. "': " .. reason)
+    else
+      normalized[zippath] = content
+    end
   end
   return normalized
 end
 
+local function validate_output_path(output_path)
+  local safe, reason = is_safe_path(output_path)
+  if not safe then
+    errorf("%s: %s", reason, output_path)
+  end
+  return output_path
+end
+
 local function copy_executable(src_path, dest_path)
+  dest_path = validate_output_path(dest_path)
   local src_fd = unix.open(src_path, unix.O_RDONLY)
   if not src_fd then
     errorf("Failed to open source: %s", src_path)
@@ -94,8 +129,19 @@ local function copy_executable(src_path, dest_path)
   while remaining > 0 do
     local to_read = math.min(remaining, chunk_size)
     local chunk = unix.read(src_fd, to_read)
-    if not chunk or #chunk == 0 then break end
-    unix.write(dest_fd, chunk)
+    if not chunk or #chunk == 0 then
+      unix.close(src_fd)
+      unix.close(dest_fd)
+      unix.unlink(dest_path)
+      errorf("Failed to read source file")
+    end
+    local written, write_err = unix.write(dest_fd, chunk)
+    if not written then
+      unix.close(src_fd)
+      unix.close(dest_fd)
+      unix.unlink(dest_path)
+      errorf("Failed to write to destination: %s", write_err or "unknown error")
+    end
     remaining = remaining - #chunk
   end
   unix.close(src_fd)
@@ -150,4 +196,6 @@ end
 
 return {
   install = install,
+  is_safe_path = is_safe_path,
+  validate_output_path = validate_output_path,
 }
