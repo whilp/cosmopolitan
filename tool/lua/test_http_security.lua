@@ -1,5 +1,4 @@
 -- Security tests for cosmo.http module
--- Tests for vulnerabilities fixed in PR #42
 
 local http = require("cosmo.http")
 
