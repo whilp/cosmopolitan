@@ -5,6 +5,14 @@
 ---This module provides low-level HTTP primitives for building servers and clients,
 ---plus a high-level serve() function for handler-based HTTP servers.
 ---
+---Security features:
+---- Header names/values are validated to prevent CRLF injection attacks
+---- Status codes must be in valid HTTP range (100-599)
+---- Maximum of 100 headers per request/response
+---- Port numbers are validated (1-65535)
+---- Timeout values must be non-negative
+---- Content-Length is respected for request body reading
+---
 ---@class cosmo.http
 local http = {}
 
@@ -80,6 +88,9 @@ function http.parse_response(raw_response) end
 
 ---Format an HTTP response from a table.
 ---
+---Validates status code (must be 100-599) and header names/values.
+---Raises an error if validation fails.
+---
 ---Example:
 ---```lua
 ---local http = require("cosmo.http")
@@ -95,6 +106,9 @@ function http.parse_response(raw_response) end
 function http.format_response(response) end
 
 ---Format an HTTP request from a table.
+---
+---Validates method, URI, and header names/values.
+---Raises an error if validation fails.
 ---
 ---Example:
 ---```lua
@@ -134,6 +148,10 @@ function http.header_name(header_constant) end
 ---
 ---The server runs in a blocking loop, calling the handler for each request.
 ---The handler receives a request table and should return a response table.
+---
+---Security: Invalid headers in the response are silently skipped. Invalid
+---status codes are normalized to 500. Request bodies are read according to
+---Content-Length header. Port numbers are validated (1-65535).
 ---
 ---Example:
 ---```lua

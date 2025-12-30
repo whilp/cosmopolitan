@@ -145,6 +145,14 @@ o/$(MODE)/tool/lua/test_http_server.ok: o/$(MODE)/tool/lua/lua.dbg tool/lua/test
 	$< tool/lua/test_http_server.lua
 	@touch $@
 
+o/$(MODE)/tool/lua/test_http_security.ok: o/$(MODE)/tool/lua/lua.dbg tool/lua/test_http_security.lua
+	$< tool/lua/test_http_security.lua
+	@touch $@
+
+o/$(MODE)/tool/lua/test_http_server_security.ok: o/$(MODE)/tool/lua/lua.dbg tool/lua/test_http_server_security.lua
+	$< tool/lua/test_http_server_security.lua
+	@touch $@
+
 TOOL_LUA_TESTS =							\
 	o/$(MODE)/tool/lua/test_cosmo.ok				\
 	o/$(MODE)/tool/lua/test_help.ok					\
@@ -155,7 +163,9 @@ TOOL_LUA_TESTS =							\
 	o/$(MODE)/tool/lua/test_strftime.ok				\
 	o/$(MODE)/tool/lua/test_zip.ok					\
 	o/$(MODE)/tool/lua/test_http.ok					\
-	o/$(MODE)/tool/lua/test_http_server.ok
+	o/$(MODE)/tool/lua/test_http_server.ok				\
+	o/$(MODE)/tool/lua/test_http_security.ok			\
+	o/$(MODE)/tool/lua/test_http_server_security.ok
 
 .PHONY: o/$(MODE)/tool/lua
 o/$(MODE)/tool/lua:							\

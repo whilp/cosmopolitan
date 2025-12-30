@@ -39,6 +39,30 @@
 
 #define HTTP_RECV_BUFSIZE  65536
 #define HTTP_MAX_REQUEST   1048576
+#define HTTP_MAX_HEADERS   100
+
+static int IsValidHttpHeaderName(const char *s, size_t len) {
+  if (len == 0) return 0;
+  for (size_t i = 0; i < len; i++) {
+    unsigned char c = s[i];
+    if (!kHttpToken[c]) return 0;
+  }
+  return 1;
+}
+
+static int IsValidHttpHeaderValue(const char *s, size_t len) {
+  for (size_t i = 0; i < len; i++) {
+    unsigned char c = s[i];
+    if (c == '\r' || c == '\n') return 0;
+    if (c < 0x20 && c != '\t') return 0;
+    if (c == 0x7f) return 0;
+  }
+  return 1;
+}
+
+static int IsValidHttpStatus(int status) {
+  return status >= 100 && status <= 599;
+}
 
 // http.parse(raw_request_string)
 //     ├─→ {method, uri, version, headers, body, header_size}
@@ -180,6 +204,10 @@ static int LuaHttpFormatResponse(lua_State *L) {
   int status = luaL_optinteger(L, -1, 200);
   lua_pop(L, 1);
 
+  if (!IsValidHttpStatus(status)) {
+    return luaL_error(L, "invalid HTTP status code: %d (must be 100-599)", status);
+  }
+
   // Build status line
   char status_line[64];
   snprintf(status_line, sizeof(status_line), "HTTP/1.1 %d %s\r\n",
@@ -191,25 +219,32 @@ static int LuaHttpFormatResponse(lua_State *L) {
   lua_getfield(L, 1, "headers");
   if (lua_istable(L, -1)) {
     int headers_idx = lua_gettop(L);
+    int header_count = 0;
     lua_pushnil(L);
     while (lua_next(L, headers_idx)) {
-      // Stack: ..., headers_table, key, value
-      const char *key = lua_tostring(L, -2);
-      const char *val = lua_tostring(L, -1);
-      lua_pop(L, 1);  // pop value first, keep key for next iteration
-      // Stack: ..., headers_table, key
+      size_t key_len, val_len;
+      const char *key = lua_tolstring(L, -2, &key_len);
+      const char *val = lua_tolstring(L, -1, &val_len);
+      lua_pop(L, 1);
       if (key && val) {
-        // Insert formatted header before headers_table
+        if (!IsValidHttpHeaderName(key, key_len)) {
+          return luaL_error(L, "invalid header name: contains invalid characters");
+        }
+        if (!IsValidHttpHeaderValue(val, val_len)) {
+          return luaL_error(L, "invalid header value: contains CR/LF or control characters");
+        }
+        if (++header_count > HTTP_MAX_HEADERS) {
+          return luaL_error(L, "too many headers (max %d)", HTTP_MAX_HEADERS);
+        }
         lua_pushfstring(L, "%s: %s\r\n", key, val);
         lua_insert(L, headers_idx);
-        headers_idx++;  // table moved up
+        headers_idx++;
         nparts++;
       }
     }
-    // Pop headers_table (now at headers_idx)
     lua_remove(L, headers_idx);
   } else {
-    lua_pop(L, 1);  // pop non-table headers
+    lua_pop(L, 1);
   }
 
   // End of headers
@@ -233,11 +268,19 @@ static int LuaHttpFormatRequest(lua_State *L) {
   luaL_checktype(L, 1, LUA_TTABLE);
 
   lua_getfield(L, 1, "method");
-  const char *method = luaL_optstring(L, -1, "GET");
+  size_t method_len;
+  const char *method = luaL_optlstring(L, -1, "GET", &method_len);
+  if (!IsValidHttpHeaderName(method, method_len)) {
+    return luaL_error(L, "invalid HTTP method: contains invalid characters");
+  }
   lua_pop(L, 1);
 
   lua_getfield(L, 1, "uri");
-  const char *uri = luaL_checkstring(L, -1);
+  size_t uri_len;
+  const char *uri = luaL_checklstring(L, -1, &uri_len);
+  if (!IsValidHttpHeaderValue(uri, uri_len)) {
+    return luaL_error(L, "invalid URI: contains CR/LF or control characters");
+  }
   lua_pop(L, 1);
 
   // Build request line
@@ -248,25 +291,32 @@ static int LuaHttpFormatRequest(lua_State *L) {
   lua_getfield(L, 1, "headers");
   if (lua_istable(L, -1)) {
     int headers_idx = lua_gettop(L);
+    int header_count = 0;
     lua_pushnil(L);
     while (lua_next(L, headers_idx)) {
-      // Stack: ..., headers_table, key, value
-      const char *key = lua_tostring(L, -2);
-      const char *val = lua_tostring(L, -1);
-      lua_pop(L, 1);  // pop value first, keep key for next iteration
-      // Stack: ..., headers_table, key
+      size_t key_len, val_len;
+      const char *key = lua_tolstring(L, -2, &key_len);
+      const char *val = lua_tolstring(L, -1, &val_len);
+      lua_pop(L, 1);
       if (key && val) {
-        // Insert formatted header before headers_table
+        if (!IsValidHttpHeaderName(key, key_len)) {
+          return luaL_error(L, "invalid header name: contains invalid characters");
+        }
+        if (!IsValidHttpHeaderValue(val, val_len)) {
+          return luaL_error(L, "invalid header value: contains CR/LF or control characters");
+        }
+        if (++header_count > HTTP_MAX_HEADERS) {
+          return luaL_error(L, "too many headers (max %d)", HTTP_MAX_HEADERS);
+        }
         lua_pushfstring(L, "%s: %s\r\n", key, val);
         lua_insert(L, headers_idx);
-        headers_idx++;  // table moved up
+        headers_idx++;
         nparts++;
       }
     }
-    // Pop headers_table (now at headers_idx)
     lua_remove(L, headers_idx);
   } else {
-    lua_pop(L, 1);  // pop non-table headers
+    lua_pop(L, 1);
   }
 
   // End of headers
@@ -303,6 +353,16 @@ static int LuaHttpHeaderName(lua_State *L) {
   return 1;
 }
 
+static int ParsePort(const char *s, uint16_t *port) {
+  if (!s || !*s) return -1;
+  char *endptr;
+  long p = strtol(s, &endptr, 10);
+  if (*endptr != '\0') return -1;
+  if (p <= 0 || p > 65535) return -1;
+  *port = (uint16_t)p;
+  return 0;
+}
+
 // Parse address string like ":8080" or "127.0.0.1:8080"
 // Returns host IP (0 for INADDR_ANY) and port, or -1 on error
 static int ParseAddr(const char *addr, uint32_t *ip, uint16_t *port) {
@@ -310,14 +370,12 @@ static int ParseAddr(const char *addr, uint32_t *ip, uint16_t *port) {
   if (!colon) {
     // Just a port number
     *ip = 0;
-    *port = atoi(addr);
-    return *port > 0 ? 0 : -1;
+    return ParsePort(addr, port);
   }
   if (colon == addr) {
     // ":8080" format
     *ip = 0;
-    *port = atoi(colon + 1);
-    return *port > 0 ? 0 : -1;
+    return ParsePort(colon + 1, port);
   }
   // "host:port" format
   char host[64];
@@ -332,8 +390,7 @@ static int ParseAddr(const char *addr, uint32_t *ip, uint16_t *port) {
     return -1;
   }
   *ip = inaddr.s_addr;
-  *port = atoi(colon + 1);
-  return *port > 0 ? 0 : -1;
+  return ParsePort(colon + 1, port);
 }
 
 // http.serve(addr, handler) or http.serve(options, handler)
@@ -380,7 +437,11 @@ static int LuaHttpServe(lua_State *L) {
 
     lua_getfield(L, 1, "timeout");
     if (!lua_isnil(L, -1)) {
-      timeout_sec = luaL_checkinteger(L, -1);
+      int t = luaL_checkinteger(L, -1);
+      if (t < 0) {
+        return luaL_error(L, "timeout must be non-negative");
+      }
+      timeout_sec = t;
     }
     lua_pop(L, 1);
 
@@ -449,14 +510,16 @@ static int LuaHttpServe(lua_State *L) {
       setsockopt(client, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
     }
 
-    // Read request
+    // Read request headers
     size_t buflen = 0;
     int parsed = 0;
     struct HttpMessage msg;
     InitHttpMessage(&msg, kHttpRequest);
 
-    while (buflen < HTTP_MAX_REQUEST) {
-      ssize_t n = recv(client, buf + buflen, HTTP_RECV_BUFSIZE - 1, 0);
+    while (buflen < HTTP_RECV_BUFSIZE - 1) {
+      size_t remaining = HTTP_RECV_BUFSIZE - 1 - buflen;
+      if (remaining == 0) break;
+      ssize_t n = recv(client, buf + buflen, remaining, 0);
       if (n <= 0) break;
       buflen += n;
       buf[buflen] = 0;
@@ -474,6 +537,45 @@ static int LuaHttpServe(lua_State *L) {
       DestroyHttpMessage(&msg);
       close(client);
       continue;
+    }
+
+    // Handle Content-Length: read full request body
+    int64_t content_length = 0;
+    if (msg.headers[kHttpContentLength].a) {
+      content_length = ParseContentLength(
+          buf + msg.headers[kHttpContentLength].a,
+          msg.headers[kHttpContentLength].b - msg.headers[kHttpContentLength].a);
+      if (content_length < 0) {
+        const char *err_resp = "HTTP/1.1 400 Bad Request\r\n"
+                               "Content-Length: 22\r\n\r\nInvalid Content-Length";
+        send(client, err_resp, strlen(err_resp), 0);
+        DestroyHttpMessage(&msg);
+        close(client);
+        continue;
+      }
+    }
+
+    // Read remaining body if Content-Length specified
+    size_t body_received = buflen - parsed;
+    if (content_length > 0 && body_received < (size_t)content_length) {
+      // Check if body fits in our buffer
+      if (parsed + (size_t)content_length > HTTP_RECV_BUFSIZE - 1) {
+        const char *err_resp = "HTTP/1.1 413 Payload Too Large\r\n"
+                               "Content-Length: 17\r\n\r\nPayload Too Large";
+        send(client, err_resp, strlen(err_resp), 0);
+        DestroyHttpMessage(&msg);
+        close(client);
+        continue;
+      }
+      // Read remaining body
+      while (body_received < (size_t)content_length) {
+        size_t remaining = (size_t)content_length - body_received;
+        ssize_t n = recv(client, buf + buflen, remaining, 0);
+        if (n <= 0) break;
+        buflen += n;
+        body_received += n;
+      }
+      buf[buflen] = 0;
     }
 
     // Build request table for Lua
@@ -552,6 +654,11 @@ static int LuaHttpServe(lua_State *L) {
       int status = luaL_optinteger(L, -1, 200);
       lua_pop(L, 1);
 
+      // Validate status code
+      if (!IsValidHttpStatus(status)) {
+        status = 500;  // Default to 500 for invalid status
+      }
+
       // Get body first to calculate Content-Length
       lua_getfield(L, -1, "body");
       size_t body_len = 0;
@@ -569,20 +676,32 @@ static int LuaHttpServe(lua_State *L) {
       // Send headers
       lua_getfield(L, -2, "headers");
       int has_content_length = 0;
+      int header_count = 0;
       if (lua_istable(L, -1)) {
         lua_pushnil(L);
         while (lua_next(L, -2)) {
-          const char *key = lua_tostring(L, -2);
-          const char *val = lua_tostring(L, -1);
+          size_t key_len, val_len;
+          const char *key = lua_tolstring(L, -2, &key_len);
+          const char *val = lua_tolstring(L, -1, &val_len);
+          lua_pop(L, 1);
           if (key && val) {
+            // Skip headers with invalid names or values (security: prevent CRLF injection)
+            if (!IsValidHttpHeaderName(key, key_len) ||
+                !IsValidHttpHeaderValue(val, val_len)) {
+              continue;
+            }
+            // Limit header count
+            if (++header_count > HTTP_MAX_HEADERS) {
+              break;
+            }
             if (strcasecmp(key, "Content-Length") == 0) {
               has_content_length = 1;
             }
-            char header[1024];
-            snprintf(header, sizeof(header), "%s: %s\r\n", key, val);
+            // Use lua_pushfstring for dynamic allocation
+            const char *header = lua_pushfstring(L, "%s: %s\r\n", key, val);
             send(client, header, strlen(header), 0);
+            lua_pop(L, 1);  // pop the formatted header string
           }
-          lua_pop(L, 1);
         }
       }
       lua_pop(L, 1);  // pop headers
