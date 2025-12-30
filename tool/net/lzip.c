@@ -42,6 +42,7 @@ struct LuaZipReader {
   int64_t cdir_size;
   int64_t count;
   int64_t file_size;
+  int64_t max_file_size;
 };
 
 struct LuaZipCdirEntry {
@@ -65,6 +66,7 @@ struct LuaZipWriter {
   size_t entry_count;
   size_t entry_capacity;
   int level;
+  int64_t max_file_size;
 };
 
 static struct LuaZipReader *GetZipReader(lua_State *L) {
@@ -112,16 +114,27 @@ static uint8_t *FindEntry(struct LuaZipReader *z, const char *name,
 // Reader Implementation
 ////////////////////////////////////////////////////////////////////////////////
 
-// zip.open(path) -> reader, nil | nil, error
+// zip.open(path, [options]) -> reader, nil | nil, error
 static int LuaZipOpen(lua_State *L) {
   const char *path;
   struct LuaZipReader *z;
   int64_t zsize, off, amt;
   int64_t cnt, cdir_off, cdir_size;
+  int64_t max_file_size = MAX_FILE_SIZE;
   char last64[65536];
   ssize_t rc;
 
   path = luaL_checkstring(L, 1);
+
+  if (lua_istable(L, 2)) {
+    lua_getfield(L, 2, "max_file_size");
+    if (!lua_isnil(L, -1)) {
+      max_file_size = luaL_checkinteger(L, -1);
+      if (max_file_size <= 0)
+        return luaL_error(L, "max_file_size must be positive");
+    }
+    lua_pop(L, 1);
+  }
 
   // open file
   int fd = open(path, O_RDONLY);
@@ -215,6 +228,7 @@ static int LuaZipOpen(lua_State *L) {
   z->cdir_size = cdir_size;
   z->count = cnt;
   z->file_size = zsize;
+  z->max_file_size = max_file_size;
 
   return 1;
 }
@@ -322,9 +336,9 @@ static int LuaZipReaderRead(lua_State *L) {
   uint32_t expected_crc = ZIP_CFILE_CRC32(cfile);
   int method = ZIP_CFILE_COMPRESSIONMETHOD(cfile);
 
-  if (compressed_size > MAX_FILE_SIZE)
+  if (compressed_size > z->max_file_size)
     return ZipError(L, "compressed size too large");
-  if (uncompressed_size > MAX_FILE_SIZE)
+  if (uncompressed_size > z->max_file_size)
     return ZipError(L, "uncompressed size too large");
   if (lfile_off < 0 || lfile_off + kZipLfileHdrMinSize > z->file_size)
     return ZipError(L, "local file offset out of bounds");
@@ -468,6 +482,7 @@ static void GetDosLocalTime(int64_t utcunixts, uint16_t *out_time,
 static int LuaZipCreate(lua_State *L) {
   const char *path = luaL_checkstring(L, 1);
   int level = Z_DEFAULT_COMPRESSION;
+  int64_t max_file_size = MAX_FILE_SIZE;
 
   if (lua_istable(L, 2)) {
     lua_getfield(L, 2, "level");
@@ -475,6 +490,14 @@ static int LuaZipCreate(lua_State *L) {
       level = luaL_checkinteger(L, -1);
       if (level < 0 || level > 9)
         return luaL_error(L, "compression level must be 0-9");
+    }
+    lua_pop(L, 1);
+
+    lua_getfield(L, 2, "max_file_size");
+    if (!lua_isnil(L, -1)) {
+      max_file_size = luaL_checkinteger(L, -1);
+      if (max_file_size <= 0)
+        return luaL_error(L, "max_file_size must be positive");
     }
     lua_pop(L, 1);
   }
@@ -498,6 +521,7 @@ static int LuaZipCreate(lua_State *L) {
   w->entry_count = 0;
   w->entry_capacity = 0;
   w->level = level;
+  w->max_file_size = max_file_size;
 
   return 1;
 }
@@ -552,6 +576,9 @@ static int LuaZipWriterAdd(lua_State *L) {
   if (namelen > 65535)
     return ZipError(L, "name too long");
 
+  if (memchr(name, '\0', namelen))
+    return ZipError(L, "name contains null byte");
+
   if (IsUnsafePath(name, namelen))
     return ZipError(L, "unsafe path (contains '..' or starts with '/')");
 
@@ -560,6 +587,9 @@ static int LuaZipWriterAdd(lua_State *L) {
 
   if (contentlen > UINT_MAX)
     return ZipError(L, "content too large (exceeds 4GB limit)");
+
+  if ((int64_t)contentlen > w->max_file_size)
+    return ZipError(L, "content exceeds max_file_size limit");
 
   // parse options
   int method = w->level > 0 ? kZipCompressionDeflate : kZipCompressionNone;

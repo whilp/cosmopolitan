@@ -325,6 +325,11 @@ result, err = writer:add("", "content")
 assert(result == nil, "empty name should be rejected")
 assert(err:match("empty"), "error should mention empty")
 
+-- Test null byte in name rejection
+result, err = writer:add("foo\0bar.txt", "content")
+assert(result == nil, "null byte in name should be rejected")
+assert(err:match("null"), "error should mention null")
+
 -- Test duplicate entry rejection
 ok, err = writer:add("unique.txt", "first")
 assert(ok, "first add should succeed")
@@ -357,6 +362,59 @@ ok, err = writer:add("perms.txt", "content", {mode = 0644})
 assert(ok, "permission-only mode should work: " .. tostring(err))
 
 writer:close()
+
+--------------------------------------------------------------------------------
+-- Test configurable max_file_size
+--------------------------------------------------------------------------------
+
+-- Test writer max_file_size enforcement
+local limit_zip = tmpdir .. "/limit_test.zip"
+writer, err = zip.create(limit_zip, {max_file_size = 100})
+assert(writer, "failed to create limited zip: " .. tostring(err))
+
+ok, err = writer:add("small.txt", "hello")
+assert(ok, "small content should work: " .. tostring(err))
+
+result, err = writer:add("big.txt", string.rep("x", 200))
+assert(result == nil, "content exceeding max_file_size should be rejected")
+assert(err:match("max_file_size"), "error should mention max_file_size")
+
+writer:close()
+
+-- Test reader max_file_size enforcement
+-- First create a zip with a larger file
+local reader_limit_zip = tmpdir .. "/reader_limit_test.zip"
+writer, err = zip.create(reader_limit_zip)
+assert(writer, "failed to create zip: " .. tostring(err))
+ok, err = writer:add("big.txt", string.rep("y", 500))
+assert(ok, "should add big file: " .. tostring(err))
+writer:close()
+
+-- Now try to read with a low limit
+reader, err = zip.open(reader_limit_zip, {max_file_size = 100})
+assert(reader, "failed to open zip with limit: " .. tostring(err))
+
+result, err = reader:read("big.txt")
+assert(result == nil, "reading file exceeding max_file_size should fail")
+assert(err:match("too large"), "error should mention size")
+
+reader:close()
+
+-- Test invalid max_file_size values
+ok, err = pcall(function()
+  zip.create(tmpdir .. "/bad.zip", {max_file_size = 0})
+end)
+assert(not ok, "max_file_size = 0 should error")
+
+ok, err = pcall(function()
+  zip.create(tmpdir .. "/bad.zip", {max_file_size = -1})
+end)
+assert(not ok, "max_file_size = -1 should error")
+
+ok, err = pcall(function()
+  zip.open(limit_zip, {max_file_size = 0})
+end)
+assert(not ok, "max_file_size = 0 on open should error")
 
 --------------------------------------------------------------------------------
 -- Cleanup
