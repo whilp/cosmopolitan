@@ -18,6 +18,7 @@
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include "tool/net/lzip.h"
 #include "libc/calls/calls.h"
+#include "libc/calls/struct/timespec.h"
 #include "libc/errno.h"
 #include "libc/mem/mem.h"
 #include "libc/str/str.h"
