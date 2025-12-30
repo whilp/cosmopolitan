@@ -109,11 +109,7 @@ assert(embed, "embed module should exist")
 assert(type(embed.install) == "function")
 
 local function get_executable_path()
-  local path = unix.readlink("/proc/self/exe")
-  if path then
-    return path
-  end
-  return arg[0] or arg[-1]
+  return arg[-1] or arg[0]
 end
 
 local exe_path = get_executable_path()

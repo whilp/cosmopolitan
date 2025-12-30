@@ -19,11 +19,7 @@ local function errorf(fmt, ...)
 end
 
 local function get_executable_path()
-  local path = unix.readlink("/proc/self/exe")
-  if path then
-    return path
-  end
-  return arg[0] or arg[-1] or error("Cannot determine executable path")
+  return arg[-1] or arg[0] or error("Cannot determine executable path")
 end
 
 local function extract_lua_files_from_zip(zip_content)
