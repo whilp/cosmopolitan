@@ -1,18 +1,20 @@
 -- Security integration tests for cosmo.http.serve()
 -- Tests server-side security features
 
+local cosmo = require("cosmo")
 local http = require("cosmo.http")
 local unix = require("cosmo.unix")
 
-local PORT = 18081  -- Use different port from other tests
+local INADDR_LOOPBACK = cosmo.ParseIp("127.0.0.1")
+local INADDR_ANY = 0
 
-local function http_request_raw(data)
+local function http_request_raw(port, data)
   local fd = unix.socket(unix.AF_INET, unix.SOCK_STREAM, 0)
   if not fd then
     return nil, "failed to create socket"
   end
 
-  local ok, err = unix.connect(fd, 0x7f000001, PORT)  -- 127.0.0.1
+  local ok, err = unix.connect(fd, INADDR_LOOPBACK, port)
   if not ok then
     unix.close(fd)
     return nil, "failed to connect: " .. tostring(err)
@@ -32,6 +34,13 @@ local function http_request_raw(data)
   unix.close(fd)
   return response
 end
+
+-- Parent binds to port 0 to get a random available port
+local server_fd = unix.socket(unix.AF_INET, unix.SOCK_STREAM, 0)
+unix.setsockopt(server_fd, unix.SOL_SOCKET, unix.SO_REUSEADDR, 1)
+unix.bind(server_fd, INADDR_ANY, 0)
+local _, PORT = unix.getsockname(server_fd)
+unix.close(server_fd)
 
 -- Fork child to run server
 local pid = unix.fork()
@@ -84,7 +93,7 @@ if pid == 0 then
   end)
   unix.exit(0)
 else
-  -- Parent: send requests and verify
+  -- Parent: wait for server to start, then send requests
   unix.nanosleep(0, 100000000)  -- 100ms
 
   local function check(desc, cond)
@@ -96,7 +105,7 @@ else
   end
 
   -- Test 1: Header name injection should be filtered
-  local resp1 = http_request_raw("GET /inject-header HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+  local resp1 = http_request_raw(PORT, "GET /inject-header HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
   check("response received", resp1)
   check("should have X-Good header", resp1:lower():find("x%-good: valid"))
   check("should NOT have injected Set-Cookie", not resp1:find("Set%-Cookie"))
@@ -104,13 +113,13 @@ else
   print("  [PASS] Header name injection filtered")
 
   -- Test 2: Header value injection should be filtered
-  local resp2 = http_request_raw("GET /inject-value HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+  local resp2 = http_request_raw(PORT, "GET /inject-value HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
   check("response received", resp2)
   check("should NOT have injected Set-Cookie", not resp2:find("Set%-Cookie: injected"))
   print("  [PASS] Header value injection filtered")
 
   -- Test 3: Invalid status code should be normalized to 500
-  local resp3 = http_request_raw("GET /bad-status HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+  local resp3 = http_request_raw(PORT, "GET /bad-status HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
   check("response received", resp3)
   check("should return 500 for invalid status", resp3:find("HTTP/1.1 500"))
   print("  [PASS] Invalid status code normalized")
@@ -118,7 +127,7 @@ else
   -- Test 4: Content-Length body reading
   local body = "Hello, this is a test body with some content!"
   local req4 = "POST /echo-body HTTP/1.1\r\nHost: localhost\r\nContent-Length: " .. #body .. "\r\nConnection: close\r\n\r\n" .. body
-  local resp4 = http_request_raw(req4)
+  local resp4 = http_request_raw(PORT, req4)
   check("response received", resp4)
   check("should echo the full body", resp4:find("Body: " .. body))
   print("  [PASS] Content-Length body properly read")
@@ -127,7 +136,7 @@ else
   local partial_body = "short"
   local req5 = "POST /echo-body HTTP/1.1\r\nHost: localhost\r\nContent-Length: 100\r\nConnection: close\r\n\r\n" .. partial_body
   -- This will timeout waiting for more body, but should still work with what it got
-  local resp5 = http_request_raw(req5)
+  local resp5 = http_request_raw(PORT, req5)
   -- Server should handle this gracefully (either timeout or partial body)
   check("response or timeout", resp5 ~= nil or true)  -- Allow timeout
   print("  [PASS] Partial body handled gracefully")
