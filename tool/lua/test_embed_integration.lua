@@ -85,12 +85,12 @@ end
 -- Read module content
 fd = unix.open("/tmp/test-module.lua", unix.O_RDONLY)
 local stat = unix.fstat(fd)
-local content = unix.read(fd, stat.size)
+local content = unix.read(fd, stat:size())
 unix.close(fd)
 
 -- Create ZIP with lua/testmodule/init.lua structure
 local filename = "lua/testmodule/init.lua"
-local crc = cosmo.Crc32(content)
+local crc = cosmo.Crc32(0, content)
 
 -- Local file header
 local lfh =
@@ -180,7 +180,7 @@ assert_true(src_fd, "Failed to open source executable")
 
 stat = unix.fstat(src_fd)
 assert_true(stat, "Failed to stat source")
-log("  ✓ Source size: " .. stat.size .. " bytes")
+log("  ✓ Source size: " .. stat:size() .. " bytes")
 
 local dst_fd = unix.open("/tmp/test-embedded-lua",
                          unix.O_WRONLY | unix.O_CREAT | unix.O_TRUNC,
@@ -189,7 +189,8 @@ assert_true(dst_fd, "Failed to create destination")
 
 -- Copy in chunks
 local chunk_size = 65536
-local remaining = stat.size
+local source_size = stat:size()
+local remaining = source_size
 local copied = 0
 
 while remaining > 0 do
@@ -207,7 +208,7 @@ end
 unix.close(src_fd)
 unix.close(dst_fd)
 
-assert_true(copied == stat.size, "Copied size mismatch")
+assert_true(copied == source_size, "Copied size mismatch")
 log("  ✓ Copied " .. copied .. " bytes")
 
 -- Step 6: Test ZIP append logic
@@ -217,7 +218,7 @@ log("Step 6: Testing ZIP append...")
 fd = unix.open("/tmp/test-simple-package.zip", unix.O_RDONLY)
 assert_true(fd, "Failed to open test package")
 stat = unix.fstat(fd)
-local zip_data = unix.read(fd, stat.size)
+local zip_data = unix.read(fd, stat:size())
 unix.close(fd)
 
 -- Extract the Lua file from ZIP
@@ -244,12 +245,12 @@ fd = unix.open("/tmp/test-embedded-lua", unix.O_WRONLY | unix.O_APPEND)
 assert_true(fd, "Failed to open for append")
 
 stat = unix.fstat(fd)
-local start_offset = stat.size
+local start_offset = stat:size()
 log("  ✓ Starting offset: " .. start_offset)
 
 -- Write local file header + data
 local zippath = ".lua/testmodule/init.lua"
-crc = cosmo.Crc32(lua_content)
+crc = cosmo.Crc32(0, lua_content)
 
 lfh =
   "\x50\x4B\x03\x04" ..
@@ -326,13 +327,13 @@ stat = unix.fstat(fd)
 unix.close(fd)
 
 local expected_min_size = start_offset + entry_size + cdir_size + #eocd
-assert_true(stat.size >= expected_min_size,
+assert_true(stat:size() >= expected_min_size,
             string.format("Embedded executable too small: %d < %d",
-                          stat.size, expected_min_size))
-log("  ✓ Embedded executable size: " .. stat.size .. " bytes")
+                          stat:size(), expected_min_size))
+log("  ✓ Embedded executable size: " .. stat:size() .. " bytes")
 
 -- Verify it's executable
-assert_true((stat.mode & 0x40) ~= 0, "File should be executable")
+assert_true((stat:mode() & 0x40) ~= 0, "File should be executable")
 log("  ✓ File is executable")
 
 -- Step 8: Try to read the embedded ZIP

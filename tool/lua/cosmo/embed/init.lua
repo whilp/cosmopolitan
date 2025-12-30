@@ -37,12 +37,8 @@ local function get_executable_path()
   return arg[0] or arg[-1] or error("Cannot determine executable path")
 end
 
-local function basename(path)
-  return path:match("([^/]+)$") or path
-end
-
 --------------------------------------------------------------------------------
--- ZIP Writing (Pure Lua)
+-- ZIP writing
 --------------------------------------------------------------------------------
 
 local function pack_u16(n)
@@ -142,14 +138,14 @@ local function append_to_zip(exe_path, files)
     unix.close(fd)
     errorf("Failed to stat: %s", exe_path)
   end
-  local start_offset = stat.size
+  local start_offset = stat:size()
 
   -- Write all local file headers + data
   local entries = {}
   local offset = start_offset
 
   for zippath, content in pairs(files) do
-    local crc = cosmo.Crc32(content)
+    local crc = cosmo.Crc32(0, content)
     local size = write_zip_entry(fd, zippath, content, crc)
 
     table.insert(entries, {
@@ -185,7 +181,7 @@ local function append_to_zip(exe_path, files)
 end
 
 --------------------------------------------------------------------------------
--- LuaRocks Integration
+-- LuaRocks integration
 --------------------------------------------------------------------------------
 
 local function fetch_url(url)
@@ -286,7 +282,7 @@ local function find_rock_download_url(rockspec_data, author, package_name, versi
 end
 
 --------------------------------------------------------------------------------
--- Package Extraction
+-- Package extraction
 --------------------------------------------------------------------------------
 
 local function extract_lua_files_from_zip(zip_content, package_name)
@@ -356,7 +352,7 @@ local function normalize_paths(files, package_name)
 end
 
 --------------------------------------------------------------------------------
--- Main Embed Functions
+-- Main embed functions
 --------------------------------------------------------------------------------
 
 function embed.install(package_name, output_path)
@@ -427,7 +423,7 @@ function embed.install(package_name, output_path)
 
   -- Copy in chunks
   local chunk_size = 65536
-  local remaining = stat.size
+  local remaining = stat:size()
   while remaining > 0 do
     local to_read = math.min(remaining, chunk_size)
     local chunk = unix.read(src_fd, to_read)

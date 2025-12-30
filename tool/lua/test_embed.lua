@@ -99,7 +99,7 @@ return M
   assert(fd, "Failed to open created test module")
   local stat = unix.fstat(fd)
   assert(stat, "Failed to stat test module")
-  assert(stat.size > 0, "Test module should not be empty")
+  assert(stat:size() > 0, "Test module should not be empty")
   unix.close(fd)
 end)
 
@@ -111,7 +111,7 @@ test("create test ZIP package", function()
   local fd = unix.open("/tmp/embed-test-simple.lua", unix.O_RDONLY)
   assert(fd, "Failed to open test module")
   local stat = unix.fstat(fd)
-  local content = unix.read(fd, stat.size)
+  local content = unix.read(fd, stat:size())
   unix.close(fd)
 
   -- Create a simple ZIP file with the module
@@ -130,7 +130,7 @@ test("create test ZIP package", function()
   end
 
   local filename = "testpkg/init.lua"
-  local crc = cosmo.Crc32(content)
+  local crc = cosmo.Crc32(0, content)
 
   -- Local file header
   local lfh =
@@ -231,7 +231,7 @@ test("ZIP writing functions work", function()
   assert(packed:byte(4) == 0x12, "pack_u32 byte 4")
 
   -- Test CRC32
-  local crc = cosmo.Crc32("hello")
+  local crc = cosmo.Crc32(0, "hello")
   assert(type(crc) == "number", "CRC32 should return a number")
   assert(crc > 0, "CRC32 should be positive")
 end)
@@ -302,7 +302,7 @@ test("file copy operations", function()
 
   -- Copy in chunks
   local chunk_size = 64
-  local remaining = stat.size
+  local remaining = stat:size()
   while remaining > 0 do
     local to_read = math.min(remaining, chunk_size)
     local chunk = unix.read(src_fd, to_read)
@@ -318,7 +318,7 @@ test("file copy operations", function()
   dst_fd = unix.open(dst, unix.O_RDONLY)
   assert(dst_fd, "Failed to open destination")
   stat = unix.fstat(dst_fd)
-  local content = unix.read(dst_fd, stat.size)
+  local content = unix.read(dst_fd, stat:size())
   unix.close(dst_fd)
 
   assert_eq(content, test_content, "Copied content should match")
