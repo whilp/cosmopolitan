@@ -93,4 +93,7 @@ local reformatted = http.format_request({
 assert(reformatted:find("GET /path%?query=1 HTTP/1.1"), "round-trip should preserve request line")
 assert(reformatted:find("Host: test.com"), "round-trip should preserve headers")
 
+-- test http.serve exists
+assert(type(http.serve) == "function", "http.serve should be a function")
+
 print("all http tests passed")

@@ -18,10 +18,26 @@
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include "tool/net/lhttp.h"
 #include "libc/serialize.h"
+#include "libc/sock/sock.h"
+#include "libc/sock/struct/sockaddr.h"
+#include "libc/sock/struct/pollfd.h"
+#include "libc/sysv/consts/af.h"
+#include "libc/sysv/consts/ipproto.h"
+#include "libc/sysv/consts/poll.h"
+#include "libc/sysv/consts/so.h"
+#include "libc/sysv/consts/sock.h"
+#include "libc/sysv/consts/sol.h"
+#include "libc/calls/calls.h"
+#include "libc/errno.h"
+#include "libc/mem/mem.h"
+#include "libc/str/str.h"
 #include "net/http/http.h"
 #include "third_party/lua/cosmo.h"
 #include "third_party/lua/lauxlib.h"
 #include "third_party/lua/lua.h"
+
+#define HTTP_RECV_BUFSIZE  65536
+#define HTTP_MAX_REQUEST   1048576
 
 // http.parse(raw_request_string)
 //     ├─→ {method, uri, version, headers, body, header_size}
@@ -286,6 +302,303 @@ static int LuaHttpHeaderName(lua_State *L) {
   return 1;
 }
 
+// Parse address string like ":8080" or "127.0.0.1:8080"
+// Returns host IP (0 for INADDR_ANY) and port, or -1 on error
+static int ParseAddr(const char *addr, uint32_t *ip, uint16_t *port) {
+  const char *colon = strchr(addr, ':');
+  if (!colon) {
+    // Just a port number
+    *ip = 0;
+    *port = atoi(addr);
+    return *port > 0 ? 0 : -1;
+  }
+  if (colon == addr) {
+    // ":8080" format
+    *ip = 0;
+    *port = atoi(colon + 1);
+    return *port > 0 ? 0 : -1;
+  }
+  // "host:port" format
+  char host[64];
+  size_t hostlen = colon - addr;
+  if (hostlen >= sizeof(host)) return -1;
+  memcpy(host, addr, hostlen);
+  host[hostlen] = 0;
+
+  // Parse IP address
+  struct in_addr inaddr;
+  if (inet_pton(AF_INET, host, &inaddr) != 1) {
+    return -1;
+  }
+  *ip = inaddr.s_addr;
+  *port = atoi(colon + 1);
+  return *port > 0 ? 0 : -1;
+}
+
+// http.serve(addr, handler) or http.serve(options, handler)
+// Starts an HTTP server that calls handler for each request
+//
+// addr: ":8080" or "127.0.0.1:8080"
+// handler: function(request) -> response_table
+//
+// options table:
+//   addr: address string (required)
+//   reuseaddr: boolean (default true)
+//   backlog: int (default 128)
+//
+static int LuaHttpServe(lua_State *L) {
+  uint32_t ip = 0;
+  uint16_t port = 0;
+  int reuseaddr = 1;
+  int backlog = 128;
+  int handler_idx;
+
+  // Parse arguments
+  if (lua_istable(L, 1)) {
+    // Options table
+    lua_getfield(L, 1, "addr");
+    const char *addr = luaL_checkstring(L, -1);
+    if (ParseAddr(addr, &ip, &port) != 0) {
+      return luaL_error(L, "invalid address: %s", addr);
+    }
+    lua_pop(L, 1);
+
+    lua_getfield(L, 1, "reuseaddr");
+    if (!lua_isnil(L, -1)) {
+      reuseaddr = lua_toboolean(L, -1);
+    }
+    lua_pop(L, 1);
+
+    lua_getfield(L, 1, "backlog");
+    if (!lua_isnil(L, -1)) {
+      backlog = luaL_checkinteger(L, -1);
+    }
+    lua_pop(L, 1);
+
+    luaL_checktype(L, 2, LUA_TFUNCTION);
+    handler_idx = 2;
+  } else {
+    // Simple form: serve(addr, handler)
+    const char *addr = luaL_checkstring(L, 1);
+    if (ParseAddr(addr, &ip, &port) != 0) {
+      return luaL_error(L, "invalid address: %s", addr);
+    }
+    luaL_checktype(L, 2, LUA_TFUNCTION);
+    handler_idx = 2;
+  }
+
+  // Create socket
+  int fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+  if (fd == -1) {
+    return luaL_error(L, "socket: %s", strerror(errno));
+  }
+
+  // Set SO_REUSEADDR
+  if (reuseaddr) {
+    int optval = 1;
+    setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval));
+  }
+
+  // Bind
+  struct sockaddr_in saddr = {0};
+  saddr.sin_family = AF_INET;
+  saddr.sin_addr.s_addr = ip;
+  saddr.sin_port = htons(port);
+  if (bind(fd, (struct sockaddr *)&saddr, sizeof(saddr)) == -1) {
+    close(fd);
+    return luaL_error(L, "bind: %s", strerror(errno));
+  }
+
+  // Listen
+  if (listen(fd, backlog) == -1) {
+    close(fd);
+    return luaL_error(L, "listen: %s", strerror(errno));
+  }
+
+  // Allocate receive buffer
+  char *buf = malloc(HTTP_RECV_BUFSIZE);
+  if (!buf) {
+    close(fd);
+    return luaL_error(L, "out of memory");
+  }
+
+  // Accept loop
+  for (;;) {
+    struct sockaddr_in client_addr;
+    uint32_t client_len = sizeof(client_addr);
+    int client = accept(fd, (struct sockaddr *)&client_addr, &client_len);
+    if (client == -1) {
+      if (errno == EINTR) continue;
+      free(buf);
+      close(fd);
+      return luaL_error(L, "accept: %s", strerror(errno));
+    }
+
+    // Read request
+    size_t buflen = 0;
+    int parsed = 0;
+    struct HttpMessage msg;
+    InitHttpMessage(&msg, kHttpRequest);
+
+    while (buflen < HTTP_MAX_REQUEST) {
+      ssize_t n = recv(client, buf + buflen, HTTP_RECV_BUFSIZE - 1, 0);
+      if (n <= 0) break;
+      buflen += n;
+      buf[buflen] = 0;
+
+      parsed = ParseHttpMessage(&msg, buf, buflen, buflen);
+      if (parsed > 0) break;  // Got complete headers
+      if (parsed < 0) break;  // Parse error
+    }
+
+    if (parsed <= 0) {
+      // Send error response
+      const char *err_resp = "HTTP/1.1 400 Bad Request\r\n"
+                             "Content-Length: 11\r\n\r\nBad Request";
+      send(client, err_resp, strlen(err_resp), 0);
+      DestroyHttpMessage(&msg);
+      close(client);
+      continue;
+    }
+
+    // Build request table for Lua
+    lua_pushvalue(L, handler_idx);  // Push handler function
+
+    lua_newtable(L);  // Request table
+
+    // method
+    char method[9] = {0};
+    WRITE64LE(method, msg.method);
+    lua_pushstring(L, method);
+    lua_setfield(L, -2, "method");
+
+    // uri
+    lua_pushlstring(L, buf + msg.uri.a, msg.uri.b - msg.uri.a);
+    lua_setfield(L, -2, "uri");
+
+    // version
+    lua_pushinteger(L, msg.version);
+    lua_setfield(L, -2, "version");
+
+    // headers
+    lua_newtable(L);
+    for (int i = 0; i < kHttpHeadersMax; i++) {
+      if (msg.headers[i].a) {
+        const char *name = GetHttpHeaderName(i);
+        lua_pushlstring(L, buf + msg.headers[i].a,
+                        msg.headers[i].b - msg.headers[i].a);
+        lua_setfield(L, -2, name);
+      }
+    }
+    for (unsigned i = 0; i < msg.xheaders.n; i++) {
+      lua_pushlstring(L, buf + msg.xheaders.p[i].v.a,
+                      msg.xheaders.p[i].v.b - msg.xheaders.p[i].v.a);
+      lua_pushlstring(L, buf + msg.xheaders.p[i].k.a,
+                      msg.xheaders.p[i].k.b - msg.xheaders.p[i].k.a);
+      lua_settable(L, -3);
+    }
+    lua_setfield(L, -2, "headers");
+
+    // body
+    if (parsed < (int)buflen) {
+      lua_pushlstring(L, buf + parsed, buflen - parsed);
+      lua_setfield(L, -2, "body");
+    }
+
+    // client_ip
+    char ipstr[INET_ADDRSTRLEN];
+    inet_ntop(AF_INET, &client_addr.sin_addr, ipstr, sizeof(ipstr));
+    lua_pushstring(L, ipstr);
+    lua_setfield(L, -2, "client_ip");
+
+    // client_port
+    lua_pushinteger(L, ntohs(client_addr.sin_port));
+    lua_setfield(L, -2, "client_port");
+
+    DestroyHttpMessage(&msg);
+
+    // Call handler
+    if (lua_pcall(L, 1, 1, 0) != LUA_OK) {
+      // Handler error - send 500
+      const char *err = lua_tostring(L, -1);
+      fprintf(stderr, "http.serve handler error: %s\n", err ? err : "unknown");
+      lua_pop(L, 1);
+      const char *err_resp = "HTTP/1.1 500 Internal Server Error\r\n"
+                             "Content-Length: 21\r\n\r\nInternal Server Error";
+      send(client, err_resp, strlen(err_resp), 0);
+      close(client);
+      continue;
+    }
+
+    // Format and send response
+    if (lua_istable(L, -1)) {
+      // Get status
+      lua_getfield(L, -1, "status");
+      int status = luaL_optinteger(L, -1, 200);
+      lua_pop(L, 1);
+
+      // Get body first to calculate Content-Length
+      lua_getfield(L, -1, "body");
+      size_t body_len = 0;
+      const char *body = NULL;
+      if (lua_isstring(L, -1)) {
+        body = lua_tolstring(L, -1, &body_len);
+      }
+
+      // Build response using format_response logic
+      char status_line[64];
+      snprintf(status_line, sizeof(status_line), "HTTP/1.1 %d %s\r\n",
+               status, GetHttpReason(status));
+      send(client, status_line, strlen(status_line), 0);
+
+      // Send headers
+      lua_getfield(L, -2, "headers");
+      int has_content_length = 0;
+      if (lua_istable(L, -1)) {
+        lua_pushnil(L);
+        while (lua_next(L, -2)) {
+          const char *key = lua_tostring(L, -2);
+          const char *val = lua_tostring(L, -1);
+          if (key && val) {
+            if (strcasecmp(key, "Content-Length") == 0) {
+              has_content_length = 1;
+            }
+            char header[1024];
+            snprintf(header, sizeof(header), "%s: %s\r\n", key, val);
+            send(client, header, strlen(header), 0);
+          }
+          lua_pop(L, 1);
+        }
+      }
+      lua_pop(L, 1);  // pop headers
+
+      // Add Content-Length if not present and body exists
+      if (body && !has_content_length) {
+        char cl[64];
+        snprintf(cl, sizeof(cl), "Content-Length: %zu\r\n", body_len);
+        send(client, cl, strlen(cl), 0);
+      }
+
+      // End headers
+      send(client, "\r\n", 2, 0);
+
+      // Send body
+      if (body) {
+        send(client, body, body_len, 0);
+      }
+      lua_pop(L, 1);  // pop body
+    }
+    lua_pop(L, 1);  // pop response table
+
+    close(client);
+  }
+
+  // Never reached, but clean up anyway
+  free(buf);
+  close(fd);
+  return 0;
+}
+
 static const luaL_Reg kLuaHttp[] = {
     {"parse", LuaHttpParse},
     {"parse_response", LuaHttpParseResponse},
@@ -293,6 +606,7 @@ static const luaL_Reg kLuaHttp[] = {
     {"format_request", LuaHttpFormatRequest},
     {"reason", LuaHttpReason},
     {"header_name", LuaHttpHeaderName},
+    {"serve", LuaHttpServe},
     {0},
 };
 
