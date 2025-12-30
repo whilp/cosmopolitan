@@ -248,19 +248,8 @@ int luaopen_cosmo(lua_State *L) {
 
   LuaZip(L);
   register_submodule(L, "cosmo.zip.c");
-  /* also register as cosmo.zip for backwards compatibility */
-  lua_getfield(L, LUA_REGISTRYINDEX, LUA_LOADED_TABLE);
-  lua_getfield(L, -1, "cosmo.zip.c");
-  lua_setfield(L, -2, "cosmo.zip");
-  lua_pop(L, 2);
-
-  /* try to load Lua zip wrapper with unified open(path, mode) API */
-  /* if it fails, cosmo.zip.c is still available as cosmo.zip */
-  (void)luaL_dostring(L,
-    "local ok, m = pcall(require, 'cosmo.zip')\n"
-    "if ok and type(m) == 'table' then\n"
-    "  package.loaded['cosmo.zip'] = m\n"
-    "end\n");
+  lua_pop(L, 1);
+  /* cosmo.zip Lua wrapper is loaded on first require("cosmo.zip") */
 
   LuaHttp(L);
   register_submodule(L, "cosmo.http");

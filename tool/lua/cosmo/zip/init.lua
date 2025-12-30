@@ -122,14 +122,21 @@ function Appender:close()
     return true
   end
 
-  local fd = unix.open(self._path, unix.O_WRONLY | unix.O_APPEND)
-  if not fd then
-    return nil, "failed to open file: " .. self._path
+  local fd, owns_fd
+  if self._fd then
+    fd = self._fd
+    owns_fd = false
+  else
+    fd = unix.open(self._path, unix.O_WRONLY | unix.O_APPEND)
+    if not fd then
+      return nil, "failed to open file: " .. self._path
+    end
+    owns_fd = true
   end
 
   local stat = unix.fstat(fd)
   if not stat then
-    unix.close(fd)
+    if owns_fd then unix.close(fd) end
     return nil, "failed to stat file"
   end
 
@@ -161,7 +168,7 @@ function Appender:close()
   end
 
   write_eocd(fd, #written_entries, cdir_size, cdir_offset)
-  unix.close(fd)
+  if owns_fd then unix.close(fd) end
   return true
 end
 
@@ -169,21 +176,40 @@ Appender.__close = Appender.close
 Appender.__gc = Appender.close
 
 -- Unified open API
-function M.open(path, mode, opts)
-  mode = mode or "r"
+-- path_or_fd can be a string (file path) or integer (file descriptor)
+-- Signatures:
+--   open(path_or_fd) -> reader (default read mode)
+--   open(path_or_fd, opts) -> reader with options (backwards compatible)
+--   open(path_or_fd, mode) -> reader/writer/appender based on mode
+--   open(path_or_fd, mode, opts) -> with options
+function M.open(path_or_fd, mode_or_opts, opts)
+  local mode = "r"
+  if type(mode_or_opts) == "table" then
+    opts = mode_or_opts
+  elseif type(mode_or_opts) == "string" then
+    mode = mode_or_opts
+  end
 
   if mode == "r" then
-    return czip.open(path, opts)
+    return czip.open(path_or_fd, opts)
   elseif mode == "w" then
-    return czip.create(path, opts)
+    return czip.create(path_or_fd, opts)
   elseif mode == "a" then
-    return setmetatable({
-      _path = path,
-      _entries = {},
-      _closed = false,
-    }, Appender)
+    if type(path_or_fd) == "number" then
+      return setmetatable({
+        _fd = path_or_fd,
+        _entries = {},
+        _closed = false,
+      }, Appender)
+    else
+      return setmetatable({
+        _path = path_or_fd,
+        _entries = {},
+        _closed = false,
+      }, Appender)
+    end
   else
-    return nil, "invalid mode: " .. mode .. " (use 'r', 'w', or 'a')"
+    return nil, "invalid mode: " .. tostring(mode) .. " (use 'r', 'w', or 'a')"
   end
 end
 
