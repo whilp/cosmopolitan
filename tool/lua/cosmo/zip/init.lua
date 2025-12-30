@@ -182,7 +182,7 @@ Appender.__gc = Appender.close
 --   open(path_or_fd, opts) -> reader with options (backwards compatible)
 --   open(path_or_fd, mode) -> reader/writer/appender based on mode
 --   open(path_or_fd, mode, opts) -> with options
-function M.open(path_or_fd, mode_or_opts, opts)
+local function open(path_or_fd, mode_or_opts, opts)
   local mode = "r"
   if type(mode_or_opts) == "table" then
     opts = mode_or_opts
@@ -212,5 +212,7 @@ function M.open(path_or_fd, mode_or_opts, opts)
     return nil, "invalid mode: " .. tostring(mode) .. " (use 'r', 'w', or 'a')"
   end
 end
+
+M.open = open
 
 return M
