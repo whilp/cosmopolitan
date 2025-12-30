@@ -85,7 +85,8 @@ TOOL_LUA_ASSETS =							\
 	o/$(MODE)/tool/lua/cosmo/http.lua.zip.o
 
 # Strip tool/lua/ prefix so files end up at /zip/.lua/
-$(TOOL_LUA_ASSETS): private ZIPOBJ_FLAGS += -C2
+o/$(MODE)/tool/lua/.lua/%.zip.o: private ZIPOBJ_FLAGS += -C2
+o/$(MODE)/tool/lua/cosmo/%.zip.o: private ZIPOBJ_FLAGS += -C2 -P.lua
 
 # Copy base definitions.lua to .lua/ for embedding
 tool/lua/.lua/definitions.lua: tool/net/definitions.lua
