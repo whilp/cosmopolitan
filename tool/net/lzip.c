@@ -29,12 +29,15 @@
 #include "third_party/zlib/zlib.h"
 
 #define LUA_ZIP_READER "zip.Reader"
+#define MAX_CDIR_SIZE (256 * 1024 * 1024)
+#define MAX_FILE_SIZE (1024 * 1024 * 1024)
 
 struct LuaZipReader {
   int fd;
   uint8_t *cdir;
   int64_t cdir_size;
   int64_t count;
+  int64_t file_size;
 };
 
 static struct LuaZipReader *GetZipReader(lua_State *L) {
@@ -55,12 +58,14 @@ static int ZipError(lua_State *L, const char *msg) {
 
 static uint8_t *FindEntry(struct LuaZipReader *z, const char *name,
                           size_t namelen) {
-  int64_t i, got;
+  int64_t i, got, hdrsize;
   for (i = got = 0;
-       i + kZipCfileHdrMinSize <= z->cdir_size && got < z->count &&
-       i + ZIP_CFILE_HDRSIZE(z->cdir + i) <= z->cdir_size;
-       i += ZIP_CFILE_HDRSIZE(z->cdir + i), ++got) {
+       i + kZipCfileHdrMinSize <= z->cdir_size && got < z->count;
+       i += hdrsize, ++got) {
     if (ZIP_CFILE_MAGIC(z->cdir + i) != kZipCfileHdrMagic)
+      return NULL;
+    hdrsize = ZIP_CFILE_HDRSIZE(z->cdir + i);
+    if (hdrsize < kZipCfileHdrMinSize || i + hdrsize > z->cdir_size)
       return NULL;
     const char *entry_name = ZIP_CFILE_NAME(z->cdir + i);
     int entry_namelen = ZIP_CFILE_NAMESIZE(z->cdir + i);
@@ -142,6 +147,16 @@ static int LuaZipOpen(lua_State *L) {
     return ZipError(L, "not a zip file");
   }
 
+  if (cdir_size > MAX_CDIR_SIZE) {
+    close(fd);
+    return ZipError(L, "central directory too large");
+  }
+
+  if (cdir_off < 0 || cdir_off + cdir_size > zsize) {
+    close(fd);
+    return ZipError(L, "central directory offset out of bounds");
+  }
+
   // read central directory
   uint8_t *cdir = malloc(cdir_size);
   if (!cdir) {
@@ -164,6 +179,7 @@ static int LuaZipOpen(lua_State *L) {
   z->cdir = cdir;
   z->cdir_size = cdir_size;
   z->count = cnt;
+  z->file_size = zsize;
 
   return 1;
 }
@@ -195,12 +211,14 @@ static int LuaZipReaderList(lua_State *L) {
 
   lua_newtable(L);
   int idx = 1;
-  int64_t i, got;
+  int64_t i, got, hdrsize;
   for (i = got = 0;
-       i + kZipCfileHdrMinSize <= z->cdir_size && got < z->count &&
-       i + ZIP_CFILE_HDRSIZE(z->cdir + i) <= z->cdir_size;
-       i += ZIP_CFILE_HDRSIZE(z->cdir + i), ++got) {
+       i + kZipCfileHdrMinSize <= z->cdir_size && got < z->count;
+       i += hdrsize, ++got) {
     if (ZIP_CFILE_MAGIC(z->cdir + i) != kZipCfileHdrMagic)
+      return ZipError(L, "corrupted central directory");
+    hdrsize = ZIP_CFILE_HDRSIZE(z->cdir + i);
+    if (hdrsize < kZipCfileHdrMinSize || i + hdrsize > z->cdir_size)
       return ZipError(L, "corrupted central directory");
     const char *name = ZIP_CFILE_NAME(z->cdir + i);
     int namelen = ZIP_CFILE_NAMESIZE(z->cdir + i);
@@ -266,7 +284,15 @@ static int LuaZipReaderRead(lua_State *L) {
   int64_t lfile_off = GetZipCfileOffset(cfile);
   int64_t compressed_size = GetZipCfileCompressedSize(cfile);
   int64_t uncompressed_size = GetZipCfileUncompressedSize(cfile);
+  uint32_t expected_crc = ZIP_CFILE_CRC32(cfile);
   int method = ZIP_CFILE_COMPRESSIONMETHOD(cfile);
+
+  if (compressed_size > MAX_FILE_SIZE)
+    return ZipError(L, "compressed size too large");
+  if (uncompressed_size > MAX_FILE_SIZE)
+    return ZipError(L, "uncompressed size too large");
+  if (lfile_off < 0 || lfile_off + kZipLfileHdrMinSize > z->file_size)
+    return ZipError(L, "local file offset out of bounds");
 
   // read local file header to get data offset
   uint8_t lfile_hdr[kZipLfileHdrMinSize];
@@ -276,6 +302,9 @@ static int LuaZipReaderRead(lua_State *L) {
   if (ZIP_LFILE_MAGIC(lfile_hdr) != kZipLfileHdrMagic)
     return ZipError(L, "bad local file header");
   int64_t data_off = lfile_off + ZIP_LFILE_HDRSIZE(lfile_hdr);
+
+  if (data_off + compressed_size > z->file_size)
+    return ZipError(L, "file data extends beyond end of archive");
 
   // read compressed data
   uint8_t *compressed = malloc(compressed_size ? compressed_size : 1);
@@ -292,7 +321,12 @@ static int LuaZipReaderRead(lua_State *L) {
   }
 
   if (method == kZipCompressionNone) {
-    // stored - return as-is
+    // stored - verify CRC32 and return as-is
+    uint32_t actual_crc = crc32_z(0, compressed, compressed_size);
+    if (actual_crc != expected_crc) {
+      free(compressed);
+      return ZipError(L, "crc32 mismatch");
+    }
     lua_pushlstring(L, (char *)compressed, compressed_size);
     free(compressed);
     return 1;
@@ -324,6 +358,13 @@ static int LuaZipReaderRead(lua_State *L) {
     if (ret != Z_STREAM_END) {
       free(uncompressed);
       return ZipError(L, "decompression failed");
+    }
+
+    // verify CRC32
+    uint32_t actual_crc = crc32_z(0, uncompressed, uncompressed_size);
+    if (actual_crc != expected_crc) {
+      free(uncompressed);
+      return ZipError(L, "crc32 mismatch");
     }
 
     lua_pushlstring(L, (char *)uncompressed, uncompressed_size);
