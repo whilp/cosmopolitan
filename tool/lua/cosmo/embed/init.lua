@@ -2,6 +2,7 @@
 -- Copyright 2025 Justine Alexandra Roberts Tunney
 -- SPDX-License-Identifier: ISC
 
+local cosmo = require("cosmo")
 local unix = require("cosmo.unix")
 local zip = require("cosmo.zip")
 local luarocks = require("cosmo.embed.luarocks")
@@ -88,42 +89,14 @@ end
 
 local function copy_executable(src_path, dest_path)
   dest_path = validate_output_path(dest_path)
-  local src_fd = unix.open(src_path, unix.O_RDONLY)
-  if not src_fd then
-    errorf("Failed to open source: %s", src_path)
+  local content, err = cosmo.Slurp(src_path)
+  if not content then
+    errorf("Failed to read source: %s", err or src_path)
   end
-  local stat = unix.fstat(src_fd)
-  if not stat then
-    unix.close(src_fd)
-    errorf("Failed to stat source")
+  local ok, write_err = cosmo.Barf(dest_path, content, 0755)
+  if not ok then
+    errorf("Failed to write destination: %s", write_err or dest_path)
   end
-  local dest_fd = unix.open(dest_path, unix.O_WRONLY | unix.O_CREAT | unix.O_TRUNC, 0755)
-  if not dest_fd then
-    unix.close(src_fd)
-    errorf("Failed to create destination: %s", dest_path)
-  end
-  local chunk_size = 65536
-  local remaining = stat:size()
-  while remaining > 0 do
-    local to_read = math.min(remaining, chunk_size)
-    local chunk = unix.read(src_fd, to_read)
-    if not chunk or #chunk == 0 then
-      unix.close(src_fd)
-      unix.close(dest_fd)
-      unix.unlink(dest_path)
-      errorf("Failed to read source file")
-    end
-    local written, write_err = unix.write(dest_fd, chunk)
-    if not written then
-      unix.close(src_fd)
-      unix.close(dest_fd)
-      unix.unlink(dest_path)
-      errorf("Failed to write to destination: %s", write_err or "unknown error")
-    end
-    remaining = remaining - #chunk
-  end
-  unix.close(src_fd)
-  unix.close(dest_fd)
 end
 
 local function install(package_name, output_path)
