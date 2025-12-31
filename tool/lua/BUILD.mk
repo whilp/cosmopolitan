@@ -90,11 +90,12 @@ TOOL_LUA_ASSETS =							\
 o/$(MODE)/tool/lua/definitions.lua.zip.o: private ZIPOBJ_FLAGS += -C2 -P.lua
 o/$(MODE)/tool/lua/cosmo/%.zip.o: private ZIPOBJ_FLAGS += -C2 -P.lua
 
-# Copy base definitions.lua for embedding
-tool/lua/definitions.lua: tool/net/definitions.lua
+# Copy base definitions.lua for embedding to build directory
+o/$(MODE)/tool/lua/definitions.lua: tool/net/definitions.lua
+	@mkdir -p $(dir $@)
 	@cp $< $@
 
-o/$(MODE)/tool/lua/definitions.lua.zip.o: tool/lua/definitions.lua
+o/$(MODE)/tool/lua/definitions.lua.zip.o: o/$(MODE)/tool/lua/definitions.lua
 
 o/$(MODE)/tool/lua/lua.dbg:						\
 		$(TOOL_LUA_DEPS)					\
