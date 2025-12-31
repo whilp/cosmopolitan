@@ -240,17 +240,28 @@ static int LuaZipOpen(lua_State *L) {
     return ZipError(L, "central directory too large");
   }
 
-  if (cdir_off < 0 || cdir_off + cdir_size > zsize) {
+  if (cdir_off < 0 || cdir_off > zsize || cdir_size > zsize - cdir_off) {
     munmap(map, zsize);
     if (owns_fd) close(fd);
     return ZipError(L, "central directory offset out of bounds");
   }
 
-  // copy central directory from mmap
+  // create userdata first with safe defaults so __gc handles cleanup on error
+  z = lua_newuserdatauv(L, sizeof(*z), 0);
+  luaL_setmetatable(L, LUA_ZIP_READER);
+  z->fd = fd;
+  z->owns_fd = owns_fd;
+  z->cdir = NULL;
+  z->cdir_size = 0;
+  z->count = 0;
+  z->file_size = 0;
+  z->max_file_size = 0;
+  z->data = NULL;
+
+  // allocate and copy central directory
   uint8_t *cdir = malloc(cdir_size ? cdir_size : 1);
   if (!cdir) {
     munmap(map, zsize);
-    if (owns_fd) close(fd);
     return SysError(L, "malloc");
   }
   if (cdir_size > 0) {
@@ -259,17 +270,11 @@ static int LuaZipOpen(lua_State *L) {
 
   munmap(map, zsize);
 
-  // create userdata
-  z = lua_newuserdatauv(L, sizeof(*z), 0);
-  luaL_setmetatable(L, LUA_ZIP_READER);
-  z->fd = fd;
-  z->owns_fd = owns_fd;
   z->cdir = cdir;
   z->cdir_size = cdir_size;
   z->count = cnt;
   z->file_size = zsize;
   z->max_file_size = max_file_size;
-  z->data = NULL;
 
   return 1;
 }
@@ -314,20 +319,12 @@ static int LuaZipFrom(lua_State *L) {
     return ZipError(L, "central directory too large");
   }
 
-  if (cdir_off < 0 || cdir_off + cdir_size > (int64_t)zsize) {
+  if (cdir_off < 0 || cdir_off > (int64_t)zsize ||
+      cdir_size > (int64_t)zsize - cdir_off) {
     return ZipError(L, "central directory offset out of bounds");
   }
 
-  // copy central directory
-  uint8_t *cdir = malloc(cdir_size ? cdir_size : 1);
-  if (!cdir) {
-    return SysError(L, "malloc");
-  }
-  if (cdir_size > 0) {
-    memcpy(cdir, data + cdir_off, cdir_size);
-  }
-
-  // create userdata with 1 user value to hold the string reference
+  // create userdata first with safe defaults so __gc handles cleanup on error
   z = lua_newuserdatauv(L, sizeof(*z), 1);
   luaL_setmetatable(L, LUA_ZIP_READER);
 
@@ -337,6 +334,22 @@ static int LuaZipFrom(lua_State *L) {
 
   z->fd = -1;
   z->owns_fd = 0;
+  z->cdir = NULL;
+  z->cdir_size = 0;
+  z->count = 0;
+  z->file_size = 0;
+  z->max_file_size = 0;
+  z->data = NULL;
+
+  // allocate and copy central directory
+  uint8_t *cdir = malloc(cdir_size ? cdir_size : 1);
+  if (!cdir) {
+    return SysError(L, "malloc");
+  }
+  if (cdir_size > 0) {
+    memcpy(cdir, data + cdir_off, cdir_size);
+  }
+
   z->cdir = cdir;
   z->cdir_size = cdir_size;
   z->count = cnt;
