@@ -359,6 +359,107 @@ int LuaStrptime(lua_State *L) {
   }
 }
 
+int LuaIso8601(lua_State *L) {
+  char buf[20];
+  struct tm tm;
+  int64_t t;
+  t = luaL_optinteger(L, 1, time(0));
+  if (lua_toboolean(L, 2)) {
+    localtime_r(&t, &tm);
+  } else {
+    gmtime_r(&t, &tm);
+  }
+  iso8601(buf, &tm);
+  lua_pushstring(L, buf);
+  return 1;
+}
+
+int LuaIso8601us(lua_State *L) {
+  char buf[27];
+  struct tm tm;
+  int64_t t;
+  long ns;
+  t = luaL_optinteger(L, 1, time(0));
+  ns = luaL_optinteger(L, 2, 0);
+  if (lua_toboolean(L, 3)) {
+    localtime_r(&t, &tm);
+  } else {
+    gmtime_r(&t, &tm);
+  }
+  iso8601us(buf, &tm, ns);
+  lua_pushstring(L, buf);
+  return 1;
+}
+
+int LuaTimegm(lua_State *L) {
+  struct tm tm;
+  int64_t t;
+  luaL_checktype(L, 1, LUA_TTABLE);
+  bzero(&tm, sizeof(tm));
+  lua_getfield(L, 1, "year");
+  tm.tm_year = luaL_checkinteger(L, -1) - 1900;
+  lua_pop(L, 1);
+  lua_getfield(L, 1, "month");
+  tm.tm_mon = luaL_checkinteger(L, -1) - 1;
+  lua_pop(L, 1);
+  lua_getfield(L, 1, "day");
+  tm.tm_mday = luaL_checkinteger(L, -1);
+  lua_pop(L, 1);
+  lua_getfield(L, 1, "hour");
+  tm.tm_hour = luaL_optinteger(L, -1, 0);
+  lua_pop(L, 1);
+  lua_getfield(L, 1, "min");
+  tm.tm_min = luaL_optinteger(L, -1, 0);
+  lua_pop(L, 1);
+  lua_getfield(L, 1, "sec");
+  tm.tm_sec = luaL_optinteger(L, -1, 0);
+  lua_pop(L, 1);
+  t = timegm(&tm);
+  if (t == -1) {
+    lua_pushnil(L);
+    lua_pushstring(L, "invalid time");
+    return 2;
+  }
+  lua_pushinteger(L, t);
+  return 1;
+}
+
+int LuaMktime(lua_State *L) {
+  struct tm tm;
+  int64_t t;
+  luaL_checktype(L, 1, LUA_TTABLE);
+  bzero(&tm, sizeof(tm));
+  lua_getfield(L, 1, "year");
+  tm.tm_year = luaL_checkinteger(L, -1) - 1900;
+  lua_pop(L, 1);
+  lua_getfield(L, 1, "month");
+  tm.tm_mon = luaL_checkinteger(L, -1) - 1;
+  lua_pop(L, 1);
+  lua_getfield(L, 1, "day");
+  tm.tm_mday = luaL_checkinteger(L, -1);
+  lua_pop(L, 1);
+  lua_getfield(L, 1, "hour");
+  tm.tm_hour = luaL_optinteger(L, -1, 0);
+  lua_pop(L, 1);
+  lua_getfield(L, 1, "min");
+  tm.tm_min = luaL_optinteger(L, -1, 0);
+  lua_pop(L, 1);
+  lua_getfield(L, 1, "sec");
+  tm.tm_sec = luaL_optinteger(L, -1, 0);
+  lua_pop(L, 1);
+  lua_getfield(L, 1, "isdst");
+  tm.tm_isdst = luaL_optinteger(L, -1, -1);
+  lua_pop(L, 1);
+  t = mktime(&tm);
+  if (t == -1) {
+    lua_pushnil(L);
+    lua_pushstring(L, "invalid time");
+    return 2;
+  }
+  lua_pushinteger(L, t);
+  return 1;
+}
+
 int LuaParseParams(lua_State *L) {
   void *m;
   size_t size;
