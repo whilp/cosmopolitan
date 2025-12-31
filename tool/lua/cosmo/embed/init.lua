@@ -2,9 +2,7 @@
 -- Copyright 2025 Justine Alexandra Roberts Tunney
 -- SPDX-License-Identifier: ISC
 
-local cosmo = require("cosmo")
 local unix = require("cosmo.unix")
-local path = require("cosmo.path")
 local zip = require("cosmo.zip")
 local luarocks = require("cosmo.embed.luarocks")
 
@@ -33,27 +31,8 @@ local function is_safe_path(filepath)
 end
 
 local function extract_lua_files_from_zip(zip_content)
-  local tmpdir = unix.mkdtemp("/tmp/cosmo-embed-XXXXXX")
-  if not tmpdir then
-    errorf("Failed to create temp directory")
-  end
-  local tmpfile = path.join(tmpdir, "package.zip")
-  -- Use restrictive permissions for temp files (0600)
-  local fd = unix.open(tmpfile, unix.O_WRONLY | unix.O_CREAT | unix.O_TRUNC, 0600)
-  if not fd then
-    unix.rmrf(tmpdir)
-    errorf("Failed to create temp file")
-  end
-  local written, write_err = unix.write(fd, zip_content)
-  if not written then
-    unix.close(fd)
-    unix.rmrf(tmpdir)
-    errorf("Failed to write temp file: %s", write_err or "unknown error")
-  end
-  unix.close(fd)
-  local reader, err = zip.open(tmpfile)
+  local reader, err = zip.from(zip_content)
   if not reader then
-    unix.rmrf(tmpdir)
     errorf("Failed to open ZIP: %s", err)
   end
   local files = {}
@@ -72,7 +51,6 @@ local function extract_lua_files_from_zip(zip_content)
     end
   end
   reader:close()
-  unix.rmrf(tmpdir)
   return files
 end
 
