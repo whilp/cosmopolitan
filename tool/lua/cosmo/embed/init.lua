@@ -104,11 +104,17 @@ local function install(package_name, output_path)
   log("Installing package: " .. package_name)
 
   log("Finding package info...")
-  local info = luarocks.find_package_info(package_name)
+  local ok, info = pcall(luarocks.find_package_info, package_name)
+  if not ok then
+    errorf("Package not found: %s", info)
+  end
   log("Found: " .. info.author .. "/" .. package_name .. " v" .. info.version)
 
   log("Downloading package...")
-  local package_content = luarocks.fetch_rock(info.author, package_name, info.version)
+  local ok2, package_content = pcall(luarocks.fetch_rock, info.author, package_name, info.version)
+  if not ok2 then
+    errorf("Failed to download: %s", package_content)
+  end
   log("Downloaded " .. #package_content .. " bytes")
 
   log("Extracting Lua files...")
