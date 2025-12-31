@@ -20,11 +20,51 @@
 #include "libc/calls/calls.h"
 #include "libc/calls/struct/rusage.h"
 #include "libc/errno.h"
+#include "libc/mem/mem.h"
+#include "libc/proc/posix_spawn.h"
 #include "libc/runtime/runtime.h"
+#include "libc/str/str.h"
 #include "libc/sysv/consts/prio.h"
 #include "libc/sysv/consts/w.h"
 #include "third_party/lua/lauxlib.h"
+#include "third_party/lua/lualib.h"
 #include "third_party/lua/lunix.h"
+
+static void FreeStringList(char **p) {
+  int i;
+  if (p) {
+    for (i = 0; p[i]; ++i) {
+      free(p[i]);
+    }
+    free(p);
+  }
+}
+
+static char **ConvertLuaArrayToStringList(lua_State *L, int i) {
+  int j, n;
+  char **p, *s;
+  luaL_checktype(L, i, LUA_TTABLE);
+  lua_len(L, i);
+  n = lua_tointeger(L, -1);
+  lua_pop(L, 1);
+  if ((p = calloc(n + 1, sizeof(*p)))) {
+    for (j = 1; j <= n; ++j) {
+      lua_geti(L, i, j);
+      s = strdup(lua_tostring(L, -1));
+      lua_pop(L, 1);
+      if (s) {
+        p[j - 1] = s;
+      } else {
+        FreeStringList(p);
+        p = 0;
+        break;
+      }
+    }
+    if (p)
+      p[j - 1] = 0;
+  }
+  return p;
+}
 
 // proc.daemon([nochdir:bool[, noclose:bool]])
 //     ├─→ true
@@ -135,6 +175,100 @@ static int LuaProcKillpg(lua_State *L) {
   }
 }
 
+// proc.execvp(prog:str[, argv:table])
+//     ├─→ ⊥
+//     └─→ nil, unix.Errno
+static int LuaProcExecvp(lua_State *L) {
+  int olderr;
+  const char *prog;
+  char **argv, **freeme, *ezargs[2];
+  olderr = errno;
+  prog = luaL_checkstring(L, 1);
+  if (!lua_isnoneornil(L, 2)) {
+    if ((argv = ConvertLuaArrayToStringList(L, 2))) {
+      freeme = argv;
+    } else {
+      return LuaUnixSysretErrno(L, "execvp", olderr);
+    }
+  } else {
+    ezargs[0] = (char *)prog;
+    ezargs[1] = 0;
+    argv = ezargs;
+    freeme = 0;
+  }
+  execvp(prog, argv);
+  FreeStringList(freeme);
+  return LuaUnixSysretErrno(L, "execvp", olderr);
+}
+
+// proc.fexecve(fd:int, argv:table[, envp:table])
+//     ├─→ ⊥
+//     └─→ nil, unix.Errno
+static int LuaProcFexecve(lua_State *L) {
+  int olderr, fd;
+  char **argv, **envp, **freeme1, **freeme2;
+  olderr = errno;
+  fd = luaL_checkinteger(L, 1);
+  if ((argv = ConvertLuaArrayToStringList(L, 2))) {
+    freeme1 = argv;
+    if (!lua_isnoneornil(L, 3)) {
+      if ((envp = ConvertLuaArrayToStringList(L, 3))) {
+        freeme2 = envp;
+      } else {
+        FreeStringList(argv);
+        return LuaUnixSysretErrno(L, "fexecve", olderr);
+      }
+    } else {
+      envp = environ;
+      freeme2 = 0;
+    }
+  } else {
+    return LuaUnixSysretErrno(L, "fexecve", olderr);
+  }
+  fexecve(fd, argv, envp);
+  FreeStringList(freeme1);
+  FreeStringList(freeme2);
+  return LuaUnixSysretErrno(L, "fexecve", olderr);
+}
+
+// proc.spawnp(prog:str, argv:table[, envp:table])
+//     ├─→ pid:int
+//     └─→ nil, unix.Errno
+static int LuaProcSpawnp(lua_State *L) {
+  int olderr, rc;
+  pid_t pid;
+  const char *prog;
+  char **argv, **envp, **freeme1, **freeme2;
+  olderr = errno;
+  prog = luaL_checkstring(L, 1);
+  if ((argv = ConvertLuaArrayToStringList(L, 2))) {
+    freeme1 = argv;
+    if (!lua_isnoneornil(L, 3)) {
+      if ((envp = ConvertLuaArrayToStringList(L, 3))) {
+        freeme2 = envp;
+      } else {
+        FreeStringList(argv);
+        return LuaUnixSysretErrno(L, "spawnp", olderr);
+      }
+    } else {
+      envp = environ;
+      freeme2 = 0;
+    }
+  } else {
+    return LuaUnixSysretErrno(L, "spawnp", olderr);
+  }
+  rc = posix_spawnp(&pid, prog, NULL, NULL, argv, envp);
+  FreeStringList(freeme1);
+  FreeStringList(freeme2);
+  if (rc == 0) {
+    lua_pushinteger(L, pid);
+    return 1;
+  } else {
+    errno = rc;
+    return LuaUnixSysretErrno(L, "spawnp", olderr);
+  }
+}
+
 static void LuaProcAddConstants(lua_State *L) {
   // Priority constants (for getpriority/setpriority)
   lua_pushinteger(L, PRIO_PROCESS);
@@ -163,6 +297,9 @@ static const luaL_Reg kLuaProcFuncs[] = {
     {"getpriority",  LuaProcGetpriority},
     {"setpriority",  LuaProcSetpriority},
     {"killpg",       LuaProcKillpg},
+    {"execvp",       LuaProcExecvp},
+    {"fexecve",      LuaProcFexecve},
+    {"spawnp",       LuaProcSpawnp},
     {NULL,           NULL},
 };
 // clang-format on
