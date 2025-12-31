@@ -444,12 +444,8 @@ static int pmain (lua_State *L) {
     lua_pushstring(L, embed_package);
     if (embed_output)
       lua_pushstring(L, embed_output);
-    else {
-      /* default output: lua-with-<package> */
-      char output[256];
-      snprintf(output, sizeof(output), "lua-with-%s", embed_package);
-      lua_pushstring(L, output);
-    }
+    else
+      lua_pushnil(L);
     if (lua_pcall(L, 2, 1, 0) != LUA_OK) {
       lua_report(L, LUA_ERRRUN);
       return 0;

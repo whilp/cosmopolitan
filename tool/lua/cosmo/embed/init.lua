@@ -127,6 +127,7 @@ local function copy_executable(src_path, dest_path)
 end
 
 local function install(package_name, output_path)
+  output_path = output_path or ("lua-with-" .. package_name)
   log("Installing package: " .. package_name)
 
   log("Finding package info...")
