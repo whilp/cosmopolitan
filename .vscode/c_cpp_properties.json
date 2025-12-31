@@ -10,7 +10,7 @@
                 "_COSMO_SOURCE",
                 "MODE=\"aarch64\""
             ],
-            "compilerPath": "${workspaceFolder}/.cosmocc/3.9.2/bin/aarch64-linux-cosmo-gcc",
+            "compilerPath": "${workspaceFolder}/.cosmocc/cosmocc-2025.12.30-fadf08259/bin/aarch64-linux-cosmo-gcc",
             "cStandard": "c17",
             "cppStandard": "c++17",
             "intelliSenseMode": "gcc-arm64",
