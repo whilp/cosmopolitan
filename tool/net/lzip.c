@@ -1229,14 +1229,24 @@ static int LuaZipAppend(lua_State *L) {
       min_lfile_off = e->offset;
 
     // Read local file header to get actual data end
-    uint8_t lfile_hdr[kZipLfileHdrMinSize];
-    if (pread(fd, lfile_hdr, kZipLfileHdrMinSize, e->offset) ==
-        kZipLfileHdrMinSize) {
-      if (ZIP_LFILE_MAGIC(lfile_hdr) == kZipLfileHdrMagic) {
-        int64_t data_off = e->offset + ZIP_LFILE_HDRSIZE(lfile_hdr);
-        int64_t this_end = data_off + e->compsize;
-        if (this_end > max_data_end)
-          max_data_end = this_end;
+    // Validate offset is within file bounds first
+    if ((int64_t)e->offset >= 0 && (int64_t)e->offset < zsize) {
+      uint8_t lfile_hdr[kZipLfileHdrMinSize];
+      if (pread(fd, lfile_hdr, kZipLfileHdrMinSize, e->offset) ==
+          kZipLfileHdrMinSize) {
+        if (ZIP_LFILE_MAGIC(lfile_hdr) == kZipLfileHdrMagic) {
+          int64_t hdr_size = ZIP_LFILE_HDRSIZE(lfile_hdr);
+          // Check for overflow and bounds before computing data_end
+          // data_off = e->offset + hdr_size, this_end = data_off + e->compsize
+          // Ensure: e->offset + hdr_size + e->compsize <= zsize (no overflow)
+          if (hdr_size >= 0 && (int64_t)e->compsize >= 0 &&
+              (int64_t)e->offset <= zsize - hdr_size &&
+              (int64_t)e->offset + hdr_size <= zsize - (int64_t)e->compsize) {
+            int64_t this_end = e->offset + hdr_size + e->compsize;
+            if (this_end > max_data_end)
+              max_data_end = this_end;
+          }
+        }
       }
     }
   }
@@ -1375,13 +1385,13 @@ static int LuaZipAppenderAdd(lua_State *L) {
       free(compdata);
       return SysError(L, "malloc");
     }
+    // Update immediately to prevent dangling pointer if next realloc fails
+    a->pending = newpending;
     uint8_t **newdata = realloc(a->pending_data, newcap * sizeof(*newdata));
     if (!newdata) {
       free(compdata);
-      free(newpending);
       return SysError(L, "malloc");
     }
-    a->pending = newpending;
     a->pending_data = newdata;
     a->pending_capacity = newcap;
   }
