@@ -28,7 +28,6 @@
 #include "tool/net/lzip.h"
 #include "tool/net/lhttp.h"
 #include "tool/net/lgoodsocket.h"
-#include "tool/net/lproc.h"
 #include "net/http/http.h"
 #include <stdlib.h>
 #include <limits.h>
@@ -259,10 +258,6 @@ int luaopen_cosmo(lua_State *L) {
 
   LuaGoodSocket(L);
   register_submodule(L, "cosmo.goodsocket");
-  lua_pop(L, 1);
-
-  LuaProc(L);
-  register_submodule(L, "cosmo.proc");
   lua_pop(L, 1);
 
   /* make help() global for convenience */
