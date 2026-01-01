@@ -19,6 +19,7 @@
 #include "libc/assert.h"
 #include "libc/calls/calls.h"
 #include "libc/calls/pledge.internal.h"
+#include "libc/calls/pledge-xnu.internal.h"
 #include "libc/calls/prctl.internal.h"
 #include "libc/calls/state.internal.h"
 #include "libc/calls/syscall-sysv.internal.h"
@@ -304,6 +305,12 @@ int pledge(const char *promises, const char *execpromises) {
         if (rc > -4096u)
           errno = -rc, rc = -1;
       }
+    } else if (IsXnu()) {
+      // macOS implementation using Sandbox Profile Language (SBPL)
+      // Minimal implementation: stdio only, no execpromises support
+      rc = sys_pledge_xnu(ipromises, __pledge_mode);
+      if (rc > -4096u)
+        errno = -rc, rc = -1;
     } else {
       e = errno;
       rc = sys_pledge(promises, execpromises);
@@ -313,7 +320,7 @@ int pledge(const char *promises, const char *execpromises) {
       }
     }
     if (!rc && !__vforked &&
-        (IsOpenbsd() || (IsLinux() && getpid() == gettid()))) {
+        (IsOpenbsd() || (IsLinux() && getpid() == gettid()) || IsXnu())) {
       __promises = ipromises;
       __execpromises = iexecpromises;
     }
