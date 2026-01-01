@@ -29,6 +29,17 @@ extern void sandbox_free_error(char *errorbuf)
 // Our implementation
 int sys_pledge_xnu(unsigned long ipromises, int mode);
 
+#else
+
+// Stub for non-macOS platforms
+// This allows the code to compile on all platforms while IsXnu()
+// provides runtime detection
+static inline int sys_pledge_xnu(unsigned long ipromises, int mode) {
+  (void)ipromises;
+  (void)mode;
+  return 0;  // No-op on non-macOS (IsXnu() will be false anyway)
+}
+
 #endif /* __APPLE__ && __MACH__ */
 
 COSMOPOLITAN_C_END_
