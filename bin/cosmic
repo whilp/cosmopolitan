@@ -1,0 +1,21 @@
+#!/bin/sh
+set -eu
+
+cosmic_url="https://github.com/whilp/world/releases/download/home-2026-01-03-101ead2/cosmic-lua"
+cosmic_bin="$(dirname "$0")/cosmic-lua"
+
+if [ ! -f "$cosmic_bin" ]; then
+    echo "Downloading cosmic-lua..." >&2
+    curl -ssLo "$cosmic_bin" "$cosmic_url"
+    chmod 755 "$cosmic_bin"
+fi
+
+if [ "${BOOTSTRAP:-}" = "1" ]; then
+    # Add bin to PATH
+    if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
+        echo "export PATH=\"$PWD/bin:\$PATH\"" >> "$CLAUDE_ENV_FILE"
+    fi
+    exit 0
+fi
+
+exec "$cosmic_bin" "$@"
