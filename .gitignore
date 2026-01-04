@@ -18,4 +18,9 @@ __pycache__
 /perf.data.old
 /qemu*core
 tool/lua/.lua/definitions.lua
+
+# Downloaded helper tools (cosmic-lua, skill modules)
+/bin
 bin/
+/skill.lua
+/skill

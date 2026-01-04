@@ -88,8 +88,6 @@ static void print_usage (const char *badoption) {
   "  -v        show version information\n"
   "  -E        ignore environment variables\n"
   "  -W        turn warnings on\n"
-  "  --skill [path]  install Claude Code skill\n"
-  "  --embed <package> [output]  embed Lua library into executable\n"
   "  --        stop handling options\n"
   "  -         stop handling options and execute stdin\n"
   ,
@@ -198,12 +196,6 @@ static int handle_script (lua_State *L, char **argv) {
 #define has_v		4	/* -v */
 #define has_e		8	/* -e */
 #define has_E		16	/* -E */
-#define has_skill	32	/* --skill */
-#define has_embed	64	/* --embed */
-
-static const char *skill_path = NULL;  /* optional path for --skill */
-static const char *embed_package = NULL;  /* required package for --embed */
-static const char *embed_output = NULL;  /* optional output path for --embed */
 
 
 /*
@@ -229,33 +221,11 @@ static int collectargs (char **argv, int *first) {
     if (argv[i][0] != '-')  /* not an option? */
         return args;  /* stop handling options */
     switch (argv[i][1]) {  /* else check option */
-      case '-':  /* '--' or '--skill' */
-        if (argv[i][2] == '\0') {  /* bare '--' */
-          *first = i + 1;
-          return args;
-        }
-        if (strcmp(argv[i], "--skill") == 0) {  /* --skill [path] */
-          args |= has_skill;
-          /* check for optional path argument */
-          if (argv[i + 1] != NULL && argv[i + 1][0] != '-') {
-            skill_path = argv[++i];
-          }
-          break;
-        }
-        if (strcmp(argv[i], "--embed") == 0) {  /* --embed <package> [output] */
-          args |= has_embed;
-          /* package name is required */
-          if (argv[i + 1] == NULL || argv[i + 1][0] == '-') {
-            return has_error;  /* missing package name */
-          }
-          embed_package = argv[++i];
-          /* check for optional output path */
-          if (argv[i + 1] != NULL && argv[i + 1][0] != '-') {
-            embed_output = argv[++i];
-          }
-          break;
-        }
-        return has_error;  /* unknown long option */
+      case '-':  /* '--' */
+        if (argv[i][2] != '\0')  /* extra characters after '--'? */
+          return has_error;  /* invalid option */
+        *first = i + 1;
+        return args;
       case '\0':  /* '-' */
         return args;  /* script "name" is '-' */
       case 'E':
@@ -406,53 +376,18 @@ static int pmain (lua_State *L) {
     lua_setfield(L, LUA_REGISTRYINDEX, "LUA_NOENV");
   }
   luaL_openlibs(L);  /* open standard libraries */
+  /* preload cosmo/unix modules (available via require, not auto-loaded) */
+  luaL_getsubtable(L, LUA_REGISTRYINDEX, LUA_PRELOAD_TABLE);
 #ifdef LUA_COSMO
-  luaL_requiref(L, "cosmo", luaopen_cosmo, 1);
+  lua_pushcfunction(L, luaopen_cosmo);
+  lua_setfield(L, -2, "cosmo");
+  lua_pushcfunction(L, LuaUnix);
+  lua_setfield(L, -2, "cosmo.unix");
 #else
-  luaL_requiref(L, "unix", LuaUnix, 1);
+  lua_pushcfunction(L, LuaUnix);
+  lua_setfield(L, -2, "unix");
 #endif
-  lua_pop(L, 1);
-  /* handle --skill option */
-  if (args & has_skill) {
-    lua_getglobal(L, "require");
-    lua_pushliteral(L, "cosmo.skill");
-    if (lua_pcall(L, 1, 1, 0) != LUA_OK) {
-      lua_report(L, LUA_ERRRUN);
-      return 0;
-    }
-    lua_getfield(L, -1, "install");
-    if (skill_path)
-      lua_pushstring(L, skill_path);
-    else
-      lua_pushnil(L);
-    if (lua_pcall(L, 1, 1, 0) != LUA_OK) {
-      lua_report(L, LUA_ERRRUN);
-      return 0;
-    }
-    lua_pushboolean(L, lua_toboolean(L, -1));
-    return 1;  /* exit after installing skill */
-  }
-  /* handle --embed option */
-  if (args & has_embed) {
-    lua_getglobal(L, "require");
-    lua_pushliteral(L, "cosmo.embed");
-    if (lua_pcall(L, 1, 1, 0) != LUA_OK) {
-      lua_report(L, LUA_ERRRUN);
-      return 0;
-    }
-    lua_getfield(L, -1, "install");
-    lua_pushstring(L, embed_package);
-    if (embed_output)
-      lua_pushstring(L, embed_output);
-    else
-      lua_pushnil(L);
-    if (lua_pcall(L, 2, 1, 0) != LUA_OK) {
-      lua_report(L, LUA_ERRRUN);
-      return 0;
-    }
-    lua_pushboolean(L, lua_toboolean(L, -1));
-    return 1;  /* exit after embedding library */
-  }
+  lua_pop(L, 1);  /* remove PRELOAD table */
   createargtable(L, argv, argc, script);  /* create table 'arg' */
   lua_gc(L, LUA_GCRESTART);  /* start GC... */
   lua_gc(L, LUA_GCGEN, 0, 0);  /* ...in generational mode */
