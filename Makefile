@@ -633,22 +633,6 @@ aarch64:
 clean:
 	$(RM) -r o
 
-cosmic_bin = bin/cosmic-lua
-
-bin/cosmic-lua:
-	@$(MKDIR) bin
-	@curl -ssLo $@ https://github.com/whilp/world/releases/download/home-2026-01-03-101ead2/cosmic-lua
-	@$(CHMOD) 755 $@
-	@ln -sf cosmic-lua bin/lua
-
-.PHONY: bootstrap
-bootstrap: bin/cosmic-lua
-	@test -z "$$CLAUDE_ENV_FILE" || $(ECHO) "export PATH=\"$(CURDIR)/bin:$$PATH\"" >> "$$CLAUDE_ENV_FILE"
-
-.PHONY: update-pr
-update-pr: bootstrap
-	$(cosmic_bin) -l skill update-pr
-
 # UNSPECIFIED PREREQUISITES TUTORIAL
 #
 # A build rule must exist for all files that make needs to consider in
