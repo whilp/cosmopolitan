@@ -102,7 +102,6 @@ XARGS ?= xargs -P4 -rs8000
 DOT ?= dot
 CLANG = clang
 TMPDIR = o/tmp
-cosmic_bin = bin/cosmic-lua
 AR = $(BOOTSTRAP)/ar.ape
 CP = $(BOOTSTRAP)/cp.ape
 RM = $(BOOTSTRAP)/rm.ape -f
@@ -633,6 +632,8 @@ aarch64:
 
 clean:
 	$(RM) -r o
+
+cosmic_bin = bin/cosmic-lua
 
 bin/cosmic-lua:
 	@$(MKDIR) bin
