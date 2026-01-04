@@ -1,16 +1,10 @@
 #!/bin/sh
 set -eu
 
-cosmic_url="https://github.com/whilp/world/releases/download/home-2026-01-03-101ead2/cosmic-lua"
-cosmic_bin="bin/cosmic-lua"
+cd "$(dirname "$0")/.."
 
-if [ ! -f "$cosmic_bin" ]; then
-    echo "Downloading cosmic-lua..."
-    curl -ssLo "$cosmic_bin" "$cosmic_url"
-    chmod 755 "$cosmic_bin"
-    ln -sf cosmic-lua bin/lua
-    echo "cosmic-lua installed to $cosmic_bin"
-fi
+# Ensure cosmic-lua is available and install the skill
+./bin/cosmic --skill >/dev/null 2>&1 || true
 
-# Install the skill if needed
-"$cosmic_bin" --skill >/dev/null 2>&1 || true
+# Create symlink if it doesn't exist
+[ -L bin/lua ] || ln -sf cosmic-lua bin/lua
