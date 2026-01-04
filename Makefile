@@ -65,7 +65,7 @@ MAKEFLAGS += --no-builtin-rules
 .SUFFIXES:
 .DELETE_ON_ERROR:
 .FEATURES: output-sync
-.PHONY: all o bins check test depend tags aarch64 clean
+.PHONY: all o bins check test depend tags aarch64 clean bootstrap
 
 ifneq ($(m),)
 ifeq ($(MODE),)
@@ -632,6 +632,10 @@ aarch64:
 
 clean:
 	$(RM) -r o
+
+.PHONY: bootstrap
+bootstrap: $(BOOTSTRAP)/mkdir.ape
+	@test -z "$$CLAUDE_ENV_FILE" || $(ECHO) "export PATH=\"$(CURDIR)/$(BOOTSTRAP):$$PATH\"" >> "$$CLAUDE_ENV_FILE"
 
 # UNSPECIFIED PREREQUISITES TUTORIAL
 #
