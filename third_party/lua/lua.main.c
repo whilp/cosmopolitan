@@ -381,9 +381,12 @@ static int pmain (lua_State *L) {
 #ifdef LUA_COSMO
   lua_pushcfunction(L, luaopen_cosmo);
   lua_setfield(L, -2, "cosmo");
-#endif
+  lua_pushcfunction(L, LuaUnix);
+  lua_setfield(L, -2, "cosmo.unix");
+#else
   lua_pushcfunction(L, LuaUnix);
   lua_setfield(L, -2, "unix");
+#endif
   lua_pop(L, 1);  /* remove PRELOAD table */
   createargtable(L, argv, argc, script);  /* create table 'arg' */
   lua_gc(L, LUA_GCRESTART);  /* start GC... */
