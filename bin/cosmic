@@ -11,9 +11,6 @@ if [ ! -f "$cosmic_bin" ]; then
 fi
 
 if [ "${BOOTSTRAP:-}" = "1" ]; then
-    # Install skill
-    "$cosmic_bin" --skill >/dev/null 2>&1 || true
-
     # Add bin to PATH
     if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
         echo "export PATH=\"$PWD/bin:\$PATH\"" >> "$CLAUDE_ENV_FILE"
