@@ -1335,8 +1335,8 @@ local ARITY_ALLOW = set({})
 
 local ARITY_SKIPPED = {}
 local arity_checked, arity_vio = 0, {}
+local targets = {}
 do
-  local targets = {}
   local function add(decl, C, tbl)
     for name, cfn in pairs(reg_cfuncs(C, tbl)) do
       targets[#targets + 1] = { decl = decl .. name, cfn = cfn }
@@ -1389,6 +1389,153 @@ end
 table.sort(ARITY_SKIPPED)
 if os.getenv("ARITY_SKIPS") then
   for _, d in ipairs(ARITY_SKIPPED) do print("  skip: " .. d) end
+end
+
+-- ===== shared-slot type conformance (LuaUnixSysretErrno family) =====
+--
+-- The arity check above only bounds a SLOT COUNT: it cannot tell a
+-- correctly-typed slot from a mislabeled one occupying the same
+-- position, so a binding that gets its return COUNT right while
+-- assigning the wrong TYPE to a shared slot passes it either way. This
+-- is exactly the unix.tiocgwinsz/unix.nanosleep-family bug (#335): a
+-- binding whose only failure path is `LuaUnixSysretErrno` (the fork's
+-- fixed `nil, string, integer` triple) and whose SUCCESS path pushes 2
+-- or more values shares its own 2nd success value with the failure
+-- triple's error STRING in return slot #2 -- so that slot's declared
+-- type must admit `string` alongside whatever the success value's own
+-- type is, or a caller narrowing on the declared type alone mishandles
+-- the failure case.
+--
+-- Scope is deliberately narrow: `unix.*` bindings backed by
+-- third_party/lua/cosmo/lunix.c and the `LuaUnixSysretErrno` helper
+-- only. The equivalent fixed-triple helpers other modules may have
+-- (lre.c, lzip.c, lsqlite3.c, largon2.c, lpath.c) are not covered here.
+
+-- The largest literal `return <integer>;` directly in `body` -- the
+-- SUCCESS-path arity. Unlike `max_returns`, this never resolves a call:
+-- in this codebase's convention a success path always returns a
+-- literal count directly, and only the failure path delegates to a
+-- helper (`LuaUnixSysretErrno` chief among them), so resolving calls
+-- here would fold the failure triple's arity back in and make the
+-- shared-slot check below vacuous -- every candidate would trivially
+-- read as arity >= 2.
+local function success_only_arity_of(body)
+  local best
+  for stmt in body:gmatch("return%s+([^;]+);") do
+    local lit = stmt:match("^(%d+)%s*$")
+    if lit then
+      local n = tonumber(lit)
+      if not best or n > best then best = n end
+    end
+  end
+  return best
+end
+
+-- The type token of a block's Nth `---@return` line (1-based), or nil
+-- when the block declares fewer than N. Only the head token is read,
+-- same as `first_return_type` above.
+local function nth_return_type(blocklines, n)
+  local i = 0
+  for _, l in ipairs(blocklines) do
+    if l:match("^%-%-%-@return") then
+      i = i + 1
+      if i == n then
+        return l:match("^%-%-%-@return%s+(%S+)")
+      end
+    end
+  end
+  return nil
+end
+
+-- Classifies one `LuaUnixSysretErrno`-family binding's slot-2 typing:
+--   nil    body is out of this check's scope (no `LuaUnixSysretErrno`
+--          failure path, or a success-only arity under 2 -- nothing of
+--          its own shares slot 2 with the failure string)
+--   true   in scope, and `slot2_type` (the binding's declared 2nd
+--          `---@return` type, or nil when it has no such line) does
+--          NOT admit `string` -- a violation
+--   false  in scope and compliant
+-- The `string` search is a whole-token match (`%f[%w]string%f[%W]`),
+-- not `^string` anchored: it must accept a wider union
+-- (`integer|string`, `string|integer`) while rejecting an unrelated
+-- identifier that merely contains the substring (e.g. `stringly`).
+local function shared_slot_violation(body, slot2_type)
+  if not body:find("LuaUnixSysretErrno%s*%(") then return nil end
+  local arity = success_only_arity_of(body)
+  if not arity or arity < 2 then return nil end
+  return not (slot2_type and slot2_type:find("%f[%w]string%f[%W]") ~= nil)
+end
+
+-- Self-check: pins the classifier against the exact tiocgwinsz-shaped
+-- mutation this check exists to catch (a fixed 4-slot annotation with
+-- slot 2 typed bare `integer`, reverted from PR #335's fix as part of
+-- that PR's own mutation test), so a regression here fails by fixture
+-- instead of riding on today's real annotations happening to comply.
+local SHARED_SLOT_TIOC_BODY = [[
+static int LuaUnixTiocgwinsz(lua_State *L) {
+  struct winsize ws;
+  int olderr = errno;
+  if (!ioctl(fd, TIOCGWINSZ, &ws)) {
+    lua_pushinteger(L, ws.ws_row);
+    lua_pushinteger(L, ws.ws_col);
+    return 2;
+  } else {
+    return LuaUnixSysretErrno(L, "ioctl(TIOCGWINSZ)", olderr);
+  }
+}
+]]
+local SHARED_SLOT_FIXTURES = {
+  -- { C body, declared type of the binding's 2nd @return line, want }
+  { SHARED_SLOT_TIOC_BODY, "integer", true },          -- pre-fix: WRONG
+  { SHARED_SLOT_TIOC_BODY, "integer|string", false },  -- current, fixed
+  { SHARED_SLOT_TIOC_BODY, "string|integer", false },  -- either union order
+  { SHARED_SLOT_TIOC_BODY, nil, true },                -- no slot-2 line at all
+  { SHARED_SLOT_TIOC_BODY, "stringly", true },         -- substring, not token
+  -- no LuaUnixSysretErrno failure path at all: out of scope
+  { "static int LuaUnixIsatty(lua_State *L) {\n  lua_pushboolean(L, ok);\n"
+    .. "  return 1;\n}\n", "integer", nil },
+  -- LuaUnixSysretErrno present, but success-only arity is 1 (nanosleep's
+  -- shape): out of scope, nothing to share slot 2 with
+  { "static int LuaUnixNanosleep(lua_State *L) {\n  if (ok) {\n"
+    .. "    lua_newtable(L);\n    return 1;\n  }\n"
+    .. "  return LuaUnixSysretErrno(L, \"nanosleep\", olderr);\n}\n",
+    "integer", nil },
+}
+for _, fx in ipairs(SHARED_SLOT_FIXTURES) do
+  local body, slot2_type, want = fx[1], fx[2], fx[3]
+  local got = shared_slot_violation(body, slot2_type)
+  assert(got == want, string.format(
+    "shared-slot self-check: shared_slot_violation(..., %s) = %s, want %s",
+    tostring(slot2_type), tostring(got), tostring(want)))
+end
+
+-- Annotations known to mistype a shared slot 2, kept so the check can
+-- land before every one is fixed. A RATCHET: it may only shrink, and a
+-- stale entry (now clean) fails just like a violation.
+local SHARED_SLOT_ALLOW = set({})
+
+local qdecl_by_disp = {}
+for _, qd in ipairs(qdecls) do
+  qdecl_by_disp[qd.disp] = qd.blocklines
+end
+
+local shared_slot_checked, shared_slot_vio = 0, {}
+for _, t in ipairs(targets) do
+  if t.decl:match("^unix%.") then
+    local body = C_BODIES[t.cfn]
+    if body then
+      local arity = body:find("LuaUnixSysretErrno%s*%(")
+        and success_only_arity_of(body) or nil
+      if arity and arity >= 2 then
+        shared_slot_checked = shared_slot_checked + 1
+        local blocklines = qdecl_by_disp[t.decl]
+        local slot2_type = blocklines and nth_return_type(blocklines, 2)
+        if shared_slot_violation(body, slot2_type) then
+          shared_slot_vio[t.decl] = true
+        end
+      end
+    end
+  end
 end
 
 -- 10) type documentation: every `---@class` needs a prose description above
@@ -1497,6 +1644,9 @@ ratchet_nosuccess(qvio.nosuccess, qvio.nosuccess_lines, QALLOW_NOSUCCESS,
 
 ratchet(arity_vio, ARITY_ALLOW, "annotation declares returns the C never pushes")
 
+ratchet(shared_slot_vio, SHARED_SLOT_ALLOW,
+  "shared success/failure slot 2 not typed to admit string")
+
 assert(#failures == 0,
   "definitions.lua coverage failures (annotate the binding or fix the " ..
   "annotation; only shrink the allowlist):\n  " ..
@@ -1513,4 +1663,7 @@ print("annotation quality: " .. #qdecls .. " declarations checked; " ..
 print("return arity: " .. arity_checked .. " bindings checked against the C; "
   .. #ARITY_SKIPPED .. " arity not statically readable; " ..
   count(ARITY_ALLOW) .. " allowlisted (shrink-only)")
+print("shared-slot types: " .. shared_slot_checked ..
+  " unix/LuaUnixSysretErrno bindings checked; " ..
+  count(SHARED_SLOT_ALLOW) .. " allowlisted (shrink-only)")
 print("test_definitions_coverage: PASS")
