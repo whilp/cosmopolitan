@@ -78,4 +78,5 @@ jobs:
 
       - name: Build and test MODE=cov (gcov instrumentation)
         run: |
-          make -j$(nproc) MODE=cov o/cov/tool/lua/test
+          make -j$(nproc) MODE=cov o/cov/tool/lua/lua.dbg
+          make MODE=cov o/cov/tool/lua/test
