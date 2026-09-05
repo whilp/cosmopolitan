@@ -6191,8 +6191,11 @@ function unix.socket(family, type, protocol) end
 --- - `SOCK_NONBLOCK`
 ---
 ---@param protocol? integer defaults to `0`.
----@return integer|nil fd1, integer fd2
----@return string? error
+---@return integer|nil fd1
+---@return integer|string fd2 the second half of the pair on success, or
+--- the error string when the call failed — failure returns exactly
+--- `nil, error, errno`, so the error lands in this slot, not one of its
+--- own
 ---@return unix.Errno? errno
 function unix.socketpair(family, type, protocol) end
 

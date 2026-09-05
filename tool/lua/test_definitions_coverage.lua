@@ -1431,20 +1431,141 @@ local function success_only_arity_of(body)
   return best
 end
 
--- The type token of a block's Nth `---@return` line (1-based), or nil
--- when the block declares fewer than N. Only the head token is read,
+-- A `---@return` line usually carries one logical return value, but this
+-- file's own dialect -- the same comma-continuation convention cosmic's
+-- gentype_parse.tl splits when generating Teal types from this file --
+-- lets ONE physical line pack more than one, e.g. unix.socketpair's
+-- `---@return integer|nil fd1, integer fd2` packs both `fd1` and `fd2`
+-- onto line 1, so line 2 (`---@return string? error`) is that block's
+-- THIRD logical return value, not its second. Splits `rest` (the text
+-- after `---@return `) into its logical entries on commas, but only at
+-- bracket depth 0 (a `table<string, integer>` or `{ a: integer, b:
+-- string }` comma stays inside its type) AND only when what follows the
+-- comma is a genuine type token -- a builtin name, a dotted module type
+-- (`unix.Errno`), or `self` -- so a comma inside a plain description
+-- ("ARIN, APNIC, DOD, etc.") is left as prose, never read as a phantom
+-- return.
+local RETURN_LINE_BUILTIN_TYPES = set({
+  "integer", "string", "number", "boolean", "any", "table", "function",
+  "userdata", "uint32", "uint16", "int64", "fun", "self",
+})
+local function split_return_line(rest)
+  local parts, current, depth = {}, "", 0
+  for i = 1, #rest do
+    local c = rest:sub(i, i)
+    if c == "<" or c == "{" or c == "(" then
+      depth = depth + 1
+    elseif c == ">" or c == "}" or c == ")" then
+      depth = depth - 1
+    end
+    if c == "," and depth == 0 then
+      local next_word = rest:sub(i + 1):match("^%s*([%w_%.]+)")
+      local is_type_token = false
+      if next_word then
+        local head = next_word:match("^([%w_]+)")
+        if head and RETURN_LINE_BUILTIN_TYPES[head] then
+          is_type_token = true
+        elseif next_word:match("^[%l_][%w_]*%.[%w_]") then
+          is_type_token = true -- a dotted module type, e.g. unix.Errno
+        end
+      end
+      if is_type_token then
+        parts[#parts + 1] = current
+        current = ""
+      else
+        current = current .. c
+      end
+    else
+      current = current .. c
+    end
+  end
+  parts[#parts + 1] = current
+  return parts
+end
+
+-- Self-check: pins split_return_line against the exact shape this check
+-- exists to resolve correctly -- unix.socketpair's real annotation packs
+-- `fd1` and `fd2` onto one physical line -- plus the ordinary shapes it
+-- must leave alone, so a regression here fails by fixture instead of
+-- riding on today's real annotations happening to already split right.
+local SPLIT_RETURN_LINE_FIXTURES = {
+  -- { line text after "---@return ", expected parts }
+  { "integer|nil fd1, integer fd2", { "integer|nil fd1", " integer fd2" } },
+  { "string? error", { "string? error" } },
+  { "integer `lsqlite3.OK` on success or else a numerical error code,",
+    { "integer `lsqlite3.OK` on success or else a numerical error code," } },
+  { "cosmo.IpCategory # a string describing the IP address. This is " ..
+    "currently Class A granular. It can tell you if traffic originated " ..
+    "from private networks, ARIN, APNIC, DOD, etc.",
+    { "cosmo.IpCategory # a string describing the IP address. This is " ..
+      "currently Class A granular. It can tell you if traffic originated " ..
+      "from private networks, ARIN, APNIC, DOD, etc." } },
+  { "table<string, integer|nil> t", { "table<string, integer|nil> t" } },
+  { "integer|nil status, table<string,string> headers, string body, string url",
+    { "integer|nil status", " table<string,string> headers", " string body",
+      " string url" } },
+}
+for _, fx in ipairs(SPLIT_RETURN_LINE_FIXTURES) do
+  local rest, want = fx[1], fx[2]
+  local got = split_return_line(rest)
+  assert(#got == #want, "split_return_line self-check: part count mismatch " ..
+    "for `" .. rest .. "`: got " .. #got .. ", want " .. #want)
+  for j = 1, #want do
+    assert(got[j] == want[j], "split_return_line self-check: part " .. j ..
+      " mismatch for `" .. rest .. "`: got `" .. tostring(got[j]) ..
+      "`, want `" .. tostring(want[j]) .. "`")
+  end
+end
+
+-- The type token of a block's Nth LOGICAL return value (1-based), or nil
+-- when the block declares fewer than N. Physical `---@return` LINE
+-- position is not the same as logical return POSITION once a line packs
+-- more than one value (see split_return_line above), so this flattens
+-- every `---@return` line's logical entries, in source order, before
+-- indexing -- reading slot N off physical line N instead would resolve
+-- unix.socketpair's real slot 2 (`fd2`, packed onto line 1) to line 2's
+-- unrelated `error` value. Only the head token of each entry is read,
 -- same as `first_return_type` above.
 local function nth_return_type(blocklines, n)
   local i = 0
   for _, l in ipairs(blocklines) do
-    if l:match("^%-%-%-@return") then
-      i = i + 1
-      if i == n then
-        return l:match("^%-%-%-@return%s+(%S+)")
+    local rest = l:match("^%-%-%-@return%s+(.+)$")
+    if rest then
+      for _, part in ipairs(split_return_line(rest)) do
+        local t = part:match("^%s*(%S+)")
+        if t then
+          i = i + 1
+          if i == n then return t end
+        end
       end
     end
   end
   return nil
+end
+
+-- Self-check: pins nth_return_type against the flattened-position
+-- resolution above, keyed to the same socketpair shape.
+local NTH_RETURN_TYPE_FIXTURES = {
+  -- { blocklines, n, expected type }
+  { { "---@return integer|nil fd1, integer fd2", "---@return string? error",
+      "---@return unix.Errno? errno" }, 1, "integer|nil" },
+  { { "---@return integer|nil fd1, integer fd2", "---@return string? error",
+      "---@return unix.Errno? errno" }, 2, "integer" },      -- fd2, not error
+  { { "---@return integer|nil fd1, integer fd2", "---@return string? error",
+      "---@return unix.Errno? errno" }, 3, "string?" },
+  { { "---@return integer|nil fd1, integer fd2", "---@return string? error",
+      "---@return unix.Errno? errno" }, 4, "unix.Errno?" },
+  { { "---@return integer|nil fd1, integer fd2", "---@return string? error",
+      "---@return unix.Errno? errno" }, 5, nil },
+  { { "---@return integer|nil rows", "---@return integer|string cols" },
+    2, "integer|string" }, -- one value per line: unaffected by the split
+}
+for _, fx in ipairs(NTH_RETURN_TYPE_FIXTURES) do
+  local blocklines, n, want = fx[1], fx[2], fx[3]
+  local got = nth_return_type(blocklines, n)
+  assert(got == want, "nth_return_type self-check: slot " .. n ..
+    " mismatch for " .. table.concat(blocklines, " / ") .. ": got " ..
+    tostring(got) .. ", want " .. tostring(want))
 end
 
 -- Classifies one `LuaUnixSysretErrno`-family binding's slot-2 typing:
