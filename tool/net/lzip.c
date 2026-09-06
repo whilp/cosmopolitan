@@ -2189,6 +2189,7 @@ static int LuaZipValidateName(lua_State *L) {
 
 static const luaL_Reg kLuaZip[] = {
     {"open", LuaZipOpen},
+    {"reader", LuaZipOpenReader},
     {"from", LuaZipFrom},
     {"create", LuaZipCreate},
     {"append", LuaZipAppend},
