@@ -22,12 +22,24 @@
 -- -j -- so no sibling test process touches this same .gcda while this
 -- one runs; the only writers during this test's window are this
 -- process itself (if it was not the first cov test to touch lfuncs.c
--- code) and the N children below. That is what makes an exact
--- before/after delta of N meaningful.
+-- code) and the N children each iteration forks below. That is what
+-- makes an exact before/after delta of N meaningful.
+--
+-- N children racing once is not reliable enough on its own: two or
+-- more of the N read-merge-write windows sometimes don't collide even
+-- with the lock missing, so a single N=8 trial misses a real lock
+-- regression on a non-trivial fraction of runs. This runs the
+-- fork-and-race body ITERATIONS times in the same process instead of
+-- widening N further, checking each iteration's own exact delta
+-- against the reading immediately before it and failing on the first
+-- iteration that is wrong -- a real regression only needs one of the
+-- ITERATIONS trials to collide, which drives the miss rate down
+-- multiplicatively without needing a much larger single-shot N.
 
 local unix = require("cosmo.unix")
 
 local N = 8
+local ITERATIONS = 5
 local GCDA = "o/cov/tool/lua/lfuncs3.o.gcda"
 
 -- The object-summary record's `runs` word: magic, version, stamp,
@@ -51,34 +63,42 @@ local function read_runs(path)
   return string.unpack("=I4", bytes)
 end
 
-local baseline = read_runs(GCDA)
-
 local lua_path = arg[-1]
 assert(lua_path, "arg[-1] should be this interpreter's own path")
 
-local pids = {}
-for _ = 1, N do
-  local pid = assert(unix.fork())
-  if pid == 0 then
-    local _, xerr = unix.execve(lua_path, {lua_path, "-e", ""})
-    io.stderr:write("execve " .. lua_path .. ": " .. tostring(xerr) .. "\n")
-    unix.exit(127)
+-- Forks N children, each execve()-ing this interpreter's own binary so
+-- they all race to rewrite GCDA at exit, and waits for all of them to
+-- exit cleanly.
+local function fork_and_race()
+  local pids = {}
+  for _ = 1, N do
+    local pid = assert(unix.fork())
+    if pid == 0 then
+      local _, xerr = unix.execve(lua_path, {lua_path, "-e", ""})
+      io.stderr:write("execve " .. lua_path .. ": " .. tostring(xerr) .. "\n")
+      unix.exit(127)
+    end
+    pids[#pids + 1] = pid
   end
-  pids[#pids + 1] = pid
+
+  for _, pid in ipairs(pids) do
+    -- wait's success value is one unix.WaitResult table ({pid=,
+    -- wstatus=, rusage=}), not positional values.
+    local result = assert(unix.wait(pid))
+    assert(unix.WIFEXITED(result.wstatus) and unix.WEXITSTATUS(result.wstatus) == 0,
+      "child " .. pid .. " did not exit cleanly: wstatus=" .. tostring(result.wstatus))
+  end
 end
 
-for _, pid in ipairs(pids) do
-  -- wait's success value is one unix.WaitResult table ({pid=,
-  -- wstatus=, rusage=}), not positional values.
-  local result = assert(unix.wait(pid))
-  assert(unix.WIFEXITED(result.wstatus) and unix.WEXITSTATUS(result.wstatus) == 0,
-    "child " .. pid .. " did not exit cleanly: wstatus=" .. tostring(result.wstatus))
+local before = read_runs(GCDA)
+for iteration = 1, ITERATIONS do
+  fork_and_race()
+  local after = read_runs(GCDA)
+  assert(after == before + N,
+    "iteration " .. iteration .. ": runs should be before(" .. before ..
+    ") + N(" .. N .. ") = " .. (before + N) .. ", got " .. after ..
+    " -- a lost write means the .gcda lock did not hold")
+  before = after
 end
-
-local after = read_runs(GCDA)
-assert(after == baseline + N,
-  "runs should be baseline(" .. baseline .. ") + N(" .. N .. ") = " ..
-  (baseline + N) .. ", got " .. after ..
-  " -- a lost write means the .gcda lock did not hold")
 
 print("PASS")
