@@ -441,6 +441,12 @@ assert(pv == -1 or (pv == nil and type(perr) == "string"),
 -- is truthful: a constant arriving as a float would make the generated type
 -- a lie, and the bit-op call sites that consume these are exactly where it
 -- would surface (whilp/cosmopolitan#142).
+--
+-- unix.E and unix.SIG are the one exception: each reaches Lua through
+-- LuaSetNameValueTable and is itself a `table<string, integer>` name->value
+-- map, not a scalar C int -- test_definitions_coverage.lua's Q5 allowlists
+-- them for the same reason (QALLOW_CONSTTYPE). Check every entry INSIDE the
+-- map is a genuine C int instead of demanding the map itself be one.
 
 local CONST_MODULES = {
   { name = "unix", t = unix },
@@ -453,6 +459,14 @@ local CONST_MODULES = {
 -- that goes missing is a binding that silently vanished, and fails below.
 local CONST_ABSENT = {
   ["unix.WCONTINUED"] = "#ifdef WCONTINUED in third_party/lua/cosmo/lunix.c",
+}
+
+-- Declared `table<string, integer>` name->value maps, checked entry-by-entry
+-- below instead of as a scalar. A RATCHET: may only grow alongside a new
+-- LuaSetNameValueTable family.
+local CONST_MAP = {
+  ["unix.E"] = true,
+  ["unix.SIG"] = true,
 }
 
 local nconst, nabsent = 0, 0
@@ -468,6 +482,18 @@ for _, m in ipairs(CONST_MODULES) do
         "it, or it is newly conditional -- fix the binding or, if the " ..
         "condition is deliberate, note it in CONST_ABSENT)")
       nabsent = nabsent + 1
+    elseif CONST_MAP[disp] then
+      assert(type(v) == "table", disp .. " declared table<string, integer>" ..
+        ", got " .. type(v))
+      local nentries = 0
+      for k2, v2 in pairs(v) do
+        assert(type(k2) == "string" and math.type(v2) == "integer",
+          string.format("%s[%s] declared integer, got %s (%s)", disp,
+            tostring(k2), tostring(math.type(v2) or type(v2)), tostring(v2)))
+        nentries = nentries + 1
+      end
+      assert(nentries > 0, disp .. " map is empty")
+      nconst = nconst + 1
     else
       assert(not CONST_ABSENT[disp], "stale CONST_ABSENT entry (present " ..
         "at runtime now, remove it): " .. disp)
@@ -478,8 +504,9 @@ for _, m in ipairs(CONST_MODULES) do
     end
   end
 end
-print("constants: " .. nconst .. " checked integer across " ..
-  #CONST_MODULES .. " modules; " .. nabsent .. " conditionally absent")
+print("constants: " .. nconst .. " checked (integer, or a table<string, " ..
+  "integer> map's own entries) across " .. #CONST_MODULES ..
+  " modules; " .. nabsent .. " conditionally absent")
 
 -- ===== every declared slot must be observed =====
 --
