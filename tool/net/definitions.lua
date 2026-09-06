@@ -4221,6 +4221,13 @@ unix = {
     PR_SET_NO_NEW_PRIVS = nil,
     PR_SET_PDEATHSIG = nil,
 
+    --- @type table<string, integer> Every genuine capget()/capset()
+    --- capability index, keyed by its full name (e.g. `"CAP_NET_ADMIN"`),
+    --- for a runtime name->number lookup. Excludes `CAP_LAST_CAP` below: it
+    --- is not its own capability but an alias for whichever `CAP_*`
+    --- constant is currently highest.
+    CAP = nil,
+
     --- @type integer Linux capability bits (prctl PR_CAPBSET_*, capget/capset).
     CAP_AUDIT_CONTROL = nil,
     CAP_AUDIT_READ = nil,
