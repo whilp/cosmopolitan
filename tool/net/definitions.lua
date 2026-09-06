@@ -1991,6 +1991,15 @@ zip = {}
 ---@overload fun(path: string|integer, mode: "a", options?: zip.OpenOptions): zip.Appender?, string?
 function zip.open(path, mode, options) end
 
+--- Opens a ZIP archive for reading. This is equivalent to
+--- `zip.open(path, "r", options)`.
+---@param path string|integer Path to the ZIP file, or file descriptor
+---@param options? zip.OpenOptions Optional settings
+---@return zip.Reader? reader ZIP reader object on success
+---@return string? error Error message on failure
+---@nodiscard
+function zip.reader(path, options) end
+
 --- Opens a ZIP archive from in-memory data for reading.
 ---
 ---@param data string ZIP file contents as a string
