@@ -123,8 +123,12 @@ o/$(MODE)/tool/net/lsqlite3.o: private					\
 		CFLAGS +=						\
 			-DSQLITE_ENABLE_DESERIALIZE
 
-# lfuncs.o is the one binding object outside TOOL_LUA_LUA_MODULES; see
-# the MODE=cov block in tool/lua/BUILD.mk.
+# lfuncs.o is the one binding object outside TOOL_LUA_LUA_MODULES —
+# tool/lua/BUILD.mk's TOOL_LUA_LUA_MODULES instruments lfuncs3.o
+# instead, a separate object compiled from this same source (see the
+# comment there). This object (lfuncs.o) is redbean's, never linked
+# into the test binary; its own .gcda under MODE=cov carries no test
+# coverage.
 ifeq ($(MODE),cov)
 o/$(MODE)/tool/net/lfuncs.o: private					\
 		CFLAGS +=						\
