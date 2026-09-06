@@ -1434,12 +1434,14 @@ end
 -- A `---@return` line usually carries one logical return value, but this
 -- file's own dialect -- the same comma-continuation convention cosmic's
 -- gentype_parse.tl splits when generating Teal types from this file --
--- lets ONE physical line pack more than one, e.g. unix.socketpair's
--- `---@return integer|nil fd1, integer fd2` packs both `fd1` and `fd2`
--- onto line 1, so line 2 (`---@return string? error`) is that block's
--- THIRD logical return value, not its second. Splits `rest` (the text
--- after `---@return `) into its logical entries on commas, but only at
--- bracket depth 0 (a `table<string, integer>` or `{ a: integer, b:
+-- lets ONE physical line pack more than one, e.g. a first `---@return`
+-- line reading `integer|nil fd1, integer fd2` packs both `fd1` and
+-- `fd2` onto line 1, so a plain-looking `---@return string? error` line
+-- right after it would be that block's THIRD logical return value, not
+-- its second (this is the shape `unix.socketpair`'s own annotation had
+-- until this file's fix split it into one value per line). Splits `rest`
+-- (the text after `---@return `) into its logical entries on commas, but
+-- only at bracket depth 0 (a `table<string, integer>` or `{ a: integer, b:
 -- string }` comma stays inside its type) AND only when what follows the
 -- comma is a genuine type token -- a builtin name, a dotted module type
 -- (`unix.Errno`), or `self` -- so a comma inside a plain description
@@ -1484,10 +1486,11 @@ local function split_return_line(rest)
 end
 
 -- Self-check: pins split_return_line against the exact shape this check
--- exists to resolve correctly -- unix.socketpair's real annotation packs
--- `fd1` and `fd2` onto one physical line -- plus the ordinary shapes it
--- must leave alone, so a regression here fails by fixture instead of
--- riding on today's real annotations happening to already split right.
+-- exists to resolve correctly -- unix.socketpair's annotation packed
+-- `fd1` and `fd2` onto one physical line before this file's own fix
+-- split them apart -- plus the ordinary shapes it must leave alone, so
+-- a regression here fails by fixture instead of riding on today's real
+-- annotations happening to already split right.
 local SPLIT_RETURN_LINE_FIXTURES = {
   -- { line text after "---@return ", expected parts }
   { "integer|nil fd1, integer fd2", { "integer|nil fd1", " integer fd2" } },
@@ -1522,10 +1525,11 @@ end
 -- position is not the same as logical return POSITION once a line packs
 -- more than one value (see split_return_line above), so this flattens
 -- every `---@return` line's logical entries, in source order, before
--- indexing -- reading slot N off physical line N instead would resolve
--- unix.socketpair's real slot 2 (`fd2`, packed onto line 1) to line 2's
--- unrelated `error` value. Only the head token of each entry is read,
--- same as `first_return_type` above.
+-- indexing -- reading slot N off physical line N instead would have
+-- resolved unix.socketpair's old slot 2 (`fd2`, packed onto line 1,
+-- before this file's own fix split it out) to the next line's unrelated
+-- `error` value. Only the head token of each entry is read, same as
+-- `first_return_type` above.
 local function nth_return_type(blocklines, n)
   local i = 0
   for _, l in ipairs(blocklines) do
