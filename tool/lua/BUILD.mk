@@ -527,6 +527,25 @@ o/$(MODE)/tool/lua/test_gcda_merge.ok: o/$(MODE)/tool/lua/lua.dbg tool/lua/test_
 	@touch $@
 TOOL_LUA_TESTS += o/$(MODE)/tool/lua/test_gcda_merge.ok
 
+# Snapshot of every cov-enrolled binding test so far, before the line
+# coverage gate below is added: that gate reads the .gcda every one of
+# these merges into, so it must depend on all of them, never just some.
+TOOL_LUA_COV_BINDING_TESTS := $(TOOL_LUA_TESTS)
+
+# Per-file C line coverage floor (tool/lua/line_coverage.lua), read
+# from gcov against the .gcno/.gcda pairs COVERAGE_CFLAGS instruments.
+# Depends on every other cov-enrolled test so it always runs last,
+# after each has merged its .gcda -- never on a partial run -- and
+# reruns whenever the script or the floor changes.
+o/$(MODE)/tool/lua/test_line_coverage.ok:				\
+		o/$(MODE)/tool/lua/lua.dbg				\
+		tool/lua/line_coverage.lua				\
+		tool/lua/line_coverage_floor.lua			\
+		$(TOOL_LUA_COV_BINDING_TESTS)
+	$< tool/lua/line_coverage.lua
+	@touch $@
+TOOL_LUA_TESTS += o/$(MODE)/tool/lua/test_line_coverage.ok
+
 # Every test process merges its counts into the shared .gcda for each
 # object it touches, so this clean exists so a run's counts are only
 # this run's: it deletes every .gcda before any test runs, and every
