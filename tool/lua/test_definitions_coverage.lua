@@ -1335,8 +1335,8 @@ local ARITY_ALLOW = set({})
 
 local ARITY_SKIPPED = {}
 local arity_checked, arity_vio = 0, {}
+local targets = {}
 do
-  local targets = {}
   local function add(decl, C, tbl)
     for name, cfn in pairs(reg_cfuncs(C, tbl)) do
       targets[#targets + 1] = { decl = decl .. name, cfn = cfn }
@@ -1389,6 +1389,278 @@ end
 table.sort(ARITY_SKIPPED)
 if os.getenv("ARITY_SKIPS") then
   for _, d in ipairs(ARITY_SKIPPED) do print("  skip: " .. d) end
+end
+
+-- ===== shared-slot type conformance (LuaUnixSysretErrno family) =====
+--
+-- The arity check above only bounds a SLOT COUNT: it cannot tell a
+-- correctly-typed slot from a mislabeled one occupying the same
+-- position, so a binding that gets its return COUNT right while
+-- assigning the wrong TYPE to a shared slot passes it either way. This
+-- is exactly the unix.tiocgwinsz/unix.nanosleep-family bug (#335): a
+-- binding whose only failure path is `LuaUnixSysretErrno` (the fork's
+-- fixed `nil, string, integer` triple) and whose SUCCESS path pushes 2
+-- or more values shares its own 2nd success value with the failure
+-- triple's error STRING in return slot #2 -- so that slot's declared
+-- type must admit `string` alongside whatever the success value's own
+-- type is, or a caller narrowing on the declared type alone mishandles
+-- the failure case.
+--
+-- Scope is deliberately narrow: `unix.*` bindings backed by
+-- third_party/lua/cosmo/lunix.c and the `LuaUnixSysretErrno` helper
+-- only. The equivalent fixed-triple helpers other modules may have
+-- (lre.c, lzip.c, lsqlite3.c, largon2.c, lpath.c) are not covered here.
+
+-- The largest literal `return <integer>;` directly in `body` -- the
+-- SUCCESS-path arity. Unlike `max_returns`, this never resolves a call:
+-- in this codebase's convention a success path always returns a
+-- literal count directly, and only the failure path delegates to a
+-- helper (`LuaUnixSysretErrno` chief among them), so resolving calls
+-- here would fold the failure triple's arity back in and make the
+-- shared-slot check below vacuous -- every candidate would trivially
+-- read as arity >= 2.
+local function success_only_arity_of(body)
+  local best
+  for stmt in body:gmatch("return%s+([^;]+);") do
+    local lit = stmt:match("^(%d+)%s*$")
+    if lit then
+      local n = tonumber(lit)
+      if not best or n > best then best = n end
+    end
+  end
+  return best
+end
+
+-- A `---@return` line usually carries one logical return value, but this
+-- file's own dialect -- the same comma-continuation convention cosmic's
+-- gentype_parse.tl splits when generating Teal types from this file --
+-- lets ONE physical line pack more than one, e.g. a first `---@return`
+-- line reading `integer|nil fd1, integer fd2` packs both `fd1` and
+-- `fd2` onto line 1, so a plain-looking `---@return string? error` line
+-- right after it would be that block's THIRD logical return value, not
+-- its second (this is the shape `unix.socketpair`'s own annotation had
+-- until this file's fix split it into one value per line). Splits `rest`
+-- (the text after `---@return `) into its logical entries on commas, but
+-- only at bracket depth 0 (a `table<string, integer>` or `{ a: integer, b:
+-- string }` comma stays inside its type) AND only when what follows the
+-- comma is a genuine type token -- a builtin name, a dotted module type
+-- (`unix.Errno`), or `self` -- so a comma inside a plain description
+-- ("ARIN, APNIC, DOD, etc.") is left as prose, never read as a phantom
+-- return.
+local RETURN_LINE_BUILTIN_TYPES = set({
+  "integer", "string", "number", "boolean", "any", "table", "function",
+  "userdata", "uint32", "uint16", "int64", "fun", "self",
+})
+local function split_return_line(rest)
+  local parts, current, depth = {}, "", 0
+  for i = 1, #rest do
+    local c = rest:sub(i, i)
+    if c == "<" or c == "{" or c == "(" then
+      depth = depth + 1
+    elseif c == ">" or c == "}" or c == ")" then
+      depth = depth - 1
+    end
+    if c == "," and depth == 0 then
+      local next_word = rest:sub(i + 1):match("^%s*([%w_%.]+)")
+      local is_type_token = false
+      if next_word then
+        local head = next_word:match("^([%w_]+)")
+        if head and RETURN_LINE_BUILTIN_TYPES[head] then
+          is_type_token = true
+        elseif next_word:match("^[%l_][%w_]*%.[%w_]") then
+          is_type_token = true -- a dotted module type, e.g. unix.Errno
+        end
+      end
+      if is_type_token then
+        parts[#parts + 1] = current
+        current = ""
+      else
+        current = current .. c
+      end
+    else
+      current = current .. c
+    end
+  end
+  parts[#parts + 1] = current
+  return parts
+end
+
+-- Self-check: pins split_return_line against the exact shape this check
+-- exists to resolve correctly -- unix.socketpair's annotation packed
+-- `fd1` and `fd2` onto one physical line before this file's own fix
+-- split them apart -- plus the ordinary shapes it must leave alone, so
+-- a regression here fails by fixture instead of riding on today's real
+-- annotations happening to already split right.
+local SPLIT_RETURN_LINE_FIXTURES = {
+  -- { line text after "---@return ", expected parts }
+  { "integer|nil fd1, integer fd2", { "integer|nil fd1", " integer fd2" } },
+  { "string? error", { "string? error" } },
+  { "integer `lsqlite3.OK` on success or else a numerical error code,",
+    { "integer `lsqlite3.OK` on success or else a numerical error code," } },
+  { "cosmo.IpCategory # a string describing the IP address. This is " ..
+    "currently Class A granular. It can tell you if traffic originated " ..
+    "from private networks, ARIN, APNIC, DOD, etc.",
+    { "cosmo.IpCategory # a string describing the IP address. This is " ..
+      "currently Class A granular. It can tell you if traffic originated " ..
+      "from private networks, ARIN, APNIC, DOD, etc." } },
+  { "table<string, integer|nil> t", { "table<string, integer|nil> t" } },
+  { "integer|nil status, table<string,string> headers, string body, string url",
+    { "integer|nil status", " table<string,string> headers", " string body",
+      " string url" } },
+}
+for _, fx in ipairs(SPLIT_RETURN_LINE_FIXTURES) do
+  local rest, want = fx[1], fx[2]
+  local got = split_return_line(rest)
+  assert(#got == #want, "split_return_line self-check: part count mismatch " ..
+    "for `" .. rest .. "`: got " .. #got .. ", want " .. #want)
+  for j = 1, #want do
+    assert(got[j] == want[j], "split_return_line self-check: part " .. j ..
+      " mismatch for `" .. rest .. "`: got `" .. tostring(got[j]) ..
+      "`, want `" .. tostring(want[j]) .. "`")
+  end
+end
+
+-- The type token of a block's Nth LOGICAL return value (1-based), or nil
+-- when the block declares fewer than N. Physical `---@return` LINE
+-- position is not the same as logical return POSITION once a line packs
+-- more than one value (see split_return_line above), so this flattens
+-- every `---@return` line's logical entries, in source order, before
+-- indexing -- reading slot N off physical line N instead would have
+-- resolved unix.socketpair's old slot 2 (`fd2`, packed onto line 1,
+-- before this file's own fix split it out) to the next line's unrelated
+-- `error` value. Only the head token of each entry is read, same as
+-- `first_return_type` above.
+local function nth_return_type(blocklines, n)
+  local i = 0
+  for _, l in ipairs(blocklines) do
+    local rest = l:match("^%-%-%-@return%s+(.+)$")
+    if rest then
+      for _, part in ipairs(split_return_line(rest)) do
+        local t = part:match("^%s*(%S+)")
+        if t then
+          i = i + 1
+          if i == n then return t end
+        end
+      end
+    end
+  end
+  return nil
+end
+
+-- Self-check: pins nth_return_type against the flattened-position
+-- resolution above, keyed to the same socketpair shape.
+local NTH_RETURN_TYPE_FIXTURES = {
+  -- { blocklines, n, expected type }
+  { { "---@return integer|nil fd1, integer fd2", "---@return string? error",
+      "---@return unix.Errno? errno" }, 1, "integer|nil" },
+  { { "---@return integer|nil fd1, integer fd2", "---@return string? error",
+      "---@return unix.Errno? errno" }, 2, "integer" },      -- fd2, not error
+  { { "---@return integer|nil fd1, integer fd2", "---@return string? error",
+      "---@return unix.Errno? errno" }, 3, "string?" },
+  { { "---@return integer|nil fd1, integer fd2", "---@return string? error",
+      "---@return unix.Errno? errno" }, 4, "unix.Errno?" },
+  { { "---@return integer|nil fd1, integer fd2", "---@return string? error",
+      "---@return unix.Errno? errno" }, 5, nil },
+  { { "---@return integer|nil rows", "---@return integer|string cols" },
+    2, "integer|string" }, -- one value per line: unaffected by the split
+}
+for _, fx in ipairs(NTH_RETURN_TYPE_FIXTURES) do
+  local blocklines, n, want = fx[1], fx[2], fx[3]
+  local got = nth_return_type(blocklines, n)
+  assert(got == want, "nth_return_type self-check: slot " .. n ..
+    " mismatch for " .. table.concat(blocklines, " / ") .. ": got " ..
+    tostring(got) .. ", want " .. tostring(want))
+end
+
+-- Classifies one `LuaUnixSysretErrno`-family binding's slot-2 typing:
+--   nil    body is out of this check's scope (no `LuaUnixSysretErrno`
+--          failure path, or a success-only arity under 2 -- nothing of
+--          its own shares slot 2 with the failure string)
+--   true   in scope, and `slot2_type` (the binding's declared 2nd
+--          `---@return` type, or nil when it has no such line) does
+--          NOT admit `string` -- a violation
+--   false  in scope and compliant
+-- The `string` search is a whole-token match (`%f[%w]string%f[%W]`),
+-- not `^string` anchored: it must accept a wider union
+-- (`integer|string`, `string|integer`) while rejecting an unrelated
+-- identifier that merely contains the substring (e.g. `stringly`).
+local function shared_slot_violation(body, slot2_type)
+  if not body:find("LuaUnixSysretErrno%s*%(") then return nil end
+  local arity = success_only_arity_of(body)
+  if not arity or arity < 2 then return nil end
+  return not (slot2_type and slot2_type:find("%f[%w]string%f[%W]") ~= nil)
+end
+
+-- Self-check: pins the classifier against the exact tiocgwinsz-shaped
+-- mutation this check exists to catch (a fixed 4-slot annotation with
+-- slot 2 typed bare `integer`, reverted from PR #335's fix as part of
+-- that PR's own mutation test), so a regression here fails by fixture
+-- instead of riding on today's real annotations happening to comply.
+local SHARED_SLOT_TIOC_BODY = [[
+static int LuaUnixTiocgwinsz(lua_State *L) {
+  struct winsize ws;
+  int olderr = errno;
+  if (!ioctl(fd, TIOCGWINSZ, &ws)) {
+    lua_pushinteger(L, ws.ws_row);
+    lua_pushinteger(L, ws.ws_col);
+    return 2;
+  } else {
+    return LuaUnixSysretErrno(L, "ioctl(TIOCGWINSZ)", olderr);
+  }
+}
+]]
+local SHARED_SLOT_FIXTURES = {
+  -- { C body, declared type of the binding's 2nd @return line, want }
+  { SHARED_SLOT_TIOC_BODY, "integer", true },          -- pre-fix: WRONG
+  { SHARED_SLOT_TIOC_BODY, "integer|string", false },  -- current, fixed
+  { SHARED_SLOT_TIOC_BODY, "string|integer", false },  -- either union order
+  { SHARED_SLOT_TIOC_BODY, nil, true },                -- no slot-2 line at all
+  { SHARED_SLOT_TIOC_BODY, "stringly", true },         -- substring, not token
+  -- no LuaUnixSysretErrno failure path at all: out of scope
+  { "static int LuaUnixIsatty(lua_State *L) {\n  lua_pushboolean(L, ok);\n"
+    .. "  return 1;\n}\n", "integer", nil },
+  -- LuaUnixSysretErrno present, but success-only arity is 1 (nanosleep's
+  -- shape): out of scope, nothing to share slot 2 with
+  { "static int LuaUnixNanosleep(lua_State *L) {\n  if (ok) {\n"
+    .. "    lua_newtable(L);\n    return 1;\n  }\n"
+    .. "  return LuaUnixSysretErrno(L, \"nanosleep\", olderr);\n}\n",
+    "integer", nil },
+}
+for _, fx in ipairs(SHARED_SLOT_FIXTURES) do
+  local body, slot2_type, want = fx[1], fx[2], fx[3]
+  local got = shared_slot_violation(body, slot2_type)
+  assert(got == want, string.format(
+    "shared-slot self-check: shared_slot_violation(..., %s) = %s, want %s",
+    tostring(slot2_type), tostring(got), tostring(want)))
+end
+
+-- Annotations known to mistype a shared slot 2, kept so the check can
+-- land before every one is fixed. A RATCHET: it may only shrink, and a
+-- stale entry (now clean) fails just like a violation.
+local SHARED_SLOT_ALLOW = set({})
+
+local qdecl_by_disp = {}
+for _, qd in ipairs(qdecls) do
+  qdecl_by_disp[qd.disp] = qd.blocklines
+end
+
+local shared_slot_checked, shared_slot_vio = 0, {}
+for _, t in ipairs(targets) do
+  if t.decl:match("^unix%.") then
+    local body = C_BODIES[t.cfn]
+    if body then
+      local arity = body:find("LuaUnixSysretErrno%s*%(")
+        and success_only_arity_of(body) or nil
+      if arity and arity >= 2 then
+        shared_slot_checked = shared_slot_checked + 1
+        local blocklines = qdecl_by_disp[t.decl]
+        local slot2_type = blocklines and nth_return_type(blocklines, 2)
+        if shared_slot_violation(body, slot2_type) then
+          shared_slot_vio[t.decl] = true
+        end
+      end
+    end
+  end
 end
 
 -- 10) type documentation: every `---@class` needs a prose description above
@@ -1497,6 +1769,9 @@ ratchet_nosuccess(qvio.nosuccess, qvio.nosuccess_lines, QALLOW_NOSUCCESS,
 
 ratchet(arity_vio, ARITY_ALLOW, "annotation declares returns the C never pushes")
 
+ratchet(shared_slot_vio, SHARED_SLOT_ALLOW,
+  "shared success/failure slot 2 not typed to admit string")
+
 assert(#failures == 0,
   "definitions.lua coverage failures (annotate the binding or fix the " ..
   "annotation; only shrink the allowlist):\n  " ..
@@ -1513,4 +1788,7 @@ print("annotation quality: " .. #qdecls .. " declarations checked; " ..
 print("return arity: " .. arity_checked .. " bindings checked against the C; "
   .. #ARITY_SKIPPED .. " arity not statically readable; " ..
   count(ARITY_ALLOW) .. " allowlisted (shrink-only)")
+print("shared-slot types: " .. shared_slot_checked ..
+  " unix/LuaUnixSysretErrno bindings checked; " ..
+  count(SHARED_SLOT_ALLOW) .. " allowlisted (shrink-only)")
 print("test_definitions_coverage: PASS")
