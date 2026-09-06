@@ -33,6 +33,12 @@ TOOL_LUA_CHECKS =							\
 ################################################################################
 # lua standalone with cosmo module
 
+# lfuncs3.o compiles the same source as tool/net/lfuncs.c (see
+# tool/lua/lfuncs3.c: `#define USE_MBEDTLS3` then `#include
+# "tool/net/lfuncs.c"`) under a different macro — it is the one
+# lfuncs.c object actually linked into lua.dbg, so under MODE=cov its
+# .gcda (not tool/net/lfuncs.o's) is the one that reflects this test
+# target's coverage of lfuncs.c.
 TOOL_LUA_LUA_MODULES =							\
 	o/$(MODE)/tool/lua/lcosmo.o					\
 	o/$(MODE)/tool/lua/lfuncs3.o					\
