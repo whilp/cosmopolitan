@@ -20,11 +20,17 @@
 --   * cov        tool/net/lcov.c              kLuaCov[]
 --   * repl       third_party/lua/cosmo/lreplmod.c   kReplFuncs[]
 --
--- unix constants are registered two ways, both covered here:
---   * literal LuaSetIntField(L, "NAME", ...) calls, and
+-- unix constants are registered three ways, all covered here:
+--   * literal LuaSetIntField(L, "NAME", ...) calls,
 --   * dynamic LoadMagnums(L, kTable, "PFX_") calls, which register PFX_ + each
 --     string in the corresponding libc/intrin/<ktable>.S magnum table (the
---     IP_/TCP_/SO_/CLOCK_ families).
+--     IP_/TCP_/SO_/CLOCK_ families), and
+--   * LuaSetNameValueTable(L, kTable, "FIELD") calls, which register FIELD
+--     itself as a single name->value map constant built from a plain C
+--     NameValue[] array (the E/SIG families -- unix.E and unix.SIG, whose
+--     entries are compile-time #define literals with no OS-resolved extern
+--     symbol behind them, so they cannot use the LoadMagnums/MagnumStr
+--     address-offset scheme the four families above depend on).
 --
 -- ALLOW_* below are the symbols that are knowingly not yet annotated. These
 -- lists are a RATCHET: they may only shrink. Adding a new binding without its
@@ -215,6 +221,13 @@ for tbl, pfx in C_unix:gmatch('LoadMagnums%(L,%s*(k%w+),%s*"([%u_]*)"%)') do
   for suffix in S:gmatch('%.e%s+[%u][%w_]*%s*,%s*"([%w_]+)"') do
     unix_consts[pfx .. suffix] = true
   end
+end
+-- unix constants: LuaSetNameValueTable(L, kTable, "FIELD") calls. Unlike
+-- LoadMagnums, the field itself is the one registered constant name -- the
+-- NameValue[] table's own rows aren't string literals in the C source, so
+-- they aren't (and don't need to be) walked here.
+for name in C_unix:gmatch('LuaSetNameValueTable%(L,%s*k%w+,%s*"([%u]+)"%)') do
+  unix_consts[name] = true
 end
 
 -- re constants: literal LuaSetIntField calls plus the kReMagnums table rows.
@@ -893,9 +906,15 @@ local QALLOW_BARE = set({
   "unix.fcntl",
 })
 
--- Q5: the whole constant surface declares `integer` today, so this list is
--- empty and must stay that way. Do not seed it -- annotate the constant.
-local QALLOW_CONSTTYPE = set({})
+-- Q5: every scalar constant declares `integer`; this allowlist is otherwise
+-- empty and must stay that way -- do not seed it, annotate the constant.
+-- unix.E and unix.SIG are the one deliberate, permanent exception: each IS
+-- a `table<string, integer>` name->value map, not a C int itself, so
+-- declaring `integer` for either would be false.
+local QALLOW_CONSTTYPE = set({
+  "unix.E",
+  "unix.SIG",
+})
 
 -- Q6: bindings whose declared success value genuinely IS a bare optional
 -- string, with no error/errno slot of its own (a single ---@return line,

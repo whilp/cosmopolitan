@@ -4565,6 +4565,166 @@ static const luaL_Reg kLuaUnix[] = {
     {0},                                  //
 };
 
+struct NameValue {
+  const char *name;
+  int value;
+};
+
+// Every genuine errno constant, keyed by its full name -- backs unix.E for
+// a runtime name->number lookup (a name read from config, computed from a
+// prefix, or otherwise not known until the program runs). Kept in sync by
+// hand with the individual unix.E<NAME> fields set below; add or remove a
+// row here exactly when that block gains or loses one.
+static const struct NameValue kErrnoNames[] = {
+    {"EPERM", EPERM},
+    {"ENOENT", ENOENT},
+    {"ESRCH", ESRCH},
+    {"EINTR", EINTR},
+    {"EIO", EIO},
+    {"ENXIO", ENXIO},
+    {"E2BIG", E2BIG},
+    {"ENOEXEC", ENOEXEC},
+    {"EBADF", EBADF},
+    {"ECHILD", ECHILD},
+    {"EAGAIN", EAGAIN},
+    {"ENOMEM", ENOMEM},
+    {"EACCES", EACCES},
+    {"EFAULT", EFAULT},
+    {"ENOTBLK", ENOTBLK},
+    {"EBUSY", EBUSY},
+    {"EEXIST", EEXIST},
+    {"EXDEV", EXDEV},
+    {"ENODEV", ENODEV},
+    {"ENOTDIR", ENOTDIR},
+    {"EISDIR", EISDIR},
+    {"EINVAL", EINVAL},
+    {"ENFILE", ENFILE},
+    {"EMFILE", EMFILE},
+    {"ENOTTY", ENOTTY},
+    {"ETXTBSY", ETXTBSY},
+    {"EFBIG", EFBIG},
+    {"ENOSPC", ENOSPC},
+    {"ESPIPE", ESPIPE},
+    {"EROFS", EROFS},
+    {"EMLINK", EMLINK},
+    {"EPIPE", EPIPE},
+    {"EDOM", EDOM},
+    {"ERANGE", ERANGE},
+    {"EDEADLK", EDEADLK},
+    {"ENAMETOOLONG", ENAMETOOLONG},
+    {"ENOLCK", ENOLCK},
+    {"ENOSYS", ENOSYS},
+    {"ENOTEMPTY", ENOTEMPTY},
+    {"ELOOP", ELOOP},
+    {"ENOMSG", ENOMSG},
+    {"EIDRM", EIDRM},
+    {"ENOTSUP", ENOTSUP},
+    {"ENOSTR", ENOSTR},
+    {"ENODATA", ENODATA},
+    {"ETIME", ETIME},
+    {"ENOSR", ENOSR},
+    {"ENONET", ENONET},
+    {"EREMOTE", EREMOTE},
+    {"ENOLINK", ENOLINK},
+    {"EPROTO", EPROTO},
+    {"EMULTIHOP", EMULTIHOP},
+    {"EBADMSG", EBADMSG},
+    {"EOVERFLOW", EOVERFLOW},
+    {"EBADFD", EBADFD},
+    {"EFTYPE", EFTYPE},
+    {"EILSEQ", EILSEQ},
+    {"ERESTART", ERESTART},
+    {"EUSERS", EUSERS},
+    {"ENOTSOCK", ENOTSOCK},
+    {"EDESTADDRREQ", EDESTADDRREQ},
+    {"EMSGSIZE", EMSGSIZE},
+    {"EPROTOTYPE", EPROTOTYPE},
+    {"ENOPROTOOPT", ENOPROTOOPT},
+    {"EPROTONOSUPPORT", EPROTONOSUPPORT},
+    {"ESOCKTNOSUPPORT", ESOCKTNOSUPPORT},
+    {"EOPNOTSUPP", EOPNOTSUPP},
+    {"EPFNOSUPPORT", EPFNOSUPPORT},
+    {"EAFNOSUPPORT", EAFNOSUPPORT},
+    {"EADDRINUSE", EADDRINUSE},
+    {"EADDRNOTAVAIL", EADDRNOTAVAIL},
+    {"ENETDOWN", ENETDOWN},
+    {"ENETUNREACH", ENETUNREACH},
+    {"ENETRESET", ENETRESET},
+    {"ECONNABORTED", ECONNABORTED},
+    {"ECONNRESET", ECONNRESET},
+    {"ENOBUFS", ENOBUFS},
+    {"EISCONN", EISCONN},
+    {"ENOTCONN", ENOTCONN},
+    {"ESHUTDOWN", ESHUTDOWN},
+    {"ETOOMANYREFS", ETOOMANYREFS},
+    {"ETIMEDOUT", ETIMEDOUT},
+    {"ECONNREFUSED", ECONNREFUSED},
+    {"EHOSTDOWN", EHOSTDOWN},
+    {"EHOSTUNREACH", EHOSTUNREACH},
+    {"EALREADY", EALREADY},
+    {"EINPROGRESS", EINPROGRESS},
+    {"ESTALE", ESTALE},
+    {"EDQUOT", EDQUOT},
+    {"ENOMEDIUM", ENOMEDIUM},
+    {"EMEDIUMTYPE", EMEDIUMTYPE},
+    {"ECANCELED", ECANCELED},
+    {"EOWNERDEAD", EOWNERDEAD},
+    {"ENOTRECOVERABLE", ENOTRECOVERABLE},
+    {"ERFKILL", ERFKILL},
+    {"EHWPOISON", EHWPOISON},
+    {0},
+};
+
+// Every genuine numbered signal constant, keyed by its full name -- backs
+// unix.SIG the same way kErrnoNames backs unix.E. Excludes the
+// SIG_BLOCK/SIG_UNBLOCK/SIG_SETMASK sigprocmask() `how` values and the
+// SIG_DFL/SIG_IGN handler-pointer sentinels set below: none of them are
+// signal numbers.
+static const struct NameValue kSignalNames[] = {
+    {"SIGHUP", SIGHUP},
+    {"SIGINT", SIGINT},
+    {"SIGQUIT", SIGQUIT},
+    {"SIGILL", SIGILL},
+    {"SIGTRAP", SIGTRAP},
+    {"SIGABRT", SIGABRT},
+    {"SIGBUS", SIGBUS},
+    {"SIGFPE", SIGFPE},
+    {"SIGKILL", SIGKILL},
+    {"SIGUSR1", SIGUSR1},
+    {"SIGSEGV", SIGSEGV},
+    {"SIGUSR2", SIGUSR2},
+    {"SIGPIPE", SIGPIPE},
+    {"SIGALRM", SIGALRM},
+    {"SIGTERM", SIGTERM},
+    {"SIGCHLD", SIGCHLD},
+    {"SIGCONT", SIGCONT},
+    {"SIGSTOP", SIGSTOP},
+    {"SIGTSTP", SIGTSTP},
+    {"SIGTTIN", SIGTTIN},
+    {"SIGTTOU", SIGTTOU},
+    {"SIGURG", SIGURG},
+    {"SIGXCPU", SIGXCPU},
+    {"SIGXFSZ", SIGXFSZ},
+    {"SIGVTALRM", SIGVTALRM},
+    {"SIGPROF", SIGPROF},
+    {"SIGWINCH", SIGWINCH},
+    {"SIGSYS", SIGSYS},
+    {0},
+};
+
+// Builds a Lua table from a NameValue[] array and assigns it as FIELD on
+// the module table on top of the stack.
+static void LuaSetNameValueTable(lua_State *L, const struct NameValue *nv,
+                                 const char *field) {
+  int i;
+  lua_newtable(L);
+  for (i = 0; nv[i].name; ++i) {
+    lua_pushinteger(L, nv[i].value);
+    lua_setfield(L, -2, nv[i].name);
+  }
+  lua_setfield(L, -2, field);
+}
+
 static void LoadMagnums(lua_State *L, const struct MagnumStr *ms,
                         const char *pfx) {
   int i;
@@ -4690,6 +4850,7 @@ int LuaUnix(lua_State *L) {
   LuaSetIntField(L, "ENOTRECOVERABLE", ENOTRECOVERABLE);
   LuaSetIntField(L, "ERFKILL", ERFKILL);
   LuaSetIntField(L, "EHWPOISON", EHWPOISON);
+  LuaSetNameValueTable(L, kErrnoNames, "E");
 
   // signals
   LuaSetIntField(L, "SIGHUP", SIGHUP);
@@ -4720,6 +4881,7 @@ int LuaUnix(lua_State *L) {
   LuaSetIntField(L, "SIGPROF", SIGPROF);
   LuaSetIntField(L, "SIGWINCH", SIGWINCH);
   LuaSetIntField(L, "SIGSYS", SIGSYS);
+  LuaSetNameValueTable(L, kSignalNames, "SIG");
 
   // open()
   LuaSetIntField(L, "O_RDONLY", O_RDONLY);

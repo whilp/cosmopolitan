@@ -3426,6 +3426,10 @@ unix = {
     --- @type integer
     DT_UNKNOWN = nil,
 
+    --- @type table<string, integer> Every errno constant, keyed by its full
+    --- name (e.g. `"ENOENT"`), for a runtime name->number lookup.
+    E = nil,
+
     --- @type integer Argument list too long.
     ---
     --- Raised by `execve`, `sched_setattr`.
@@ -4339,6 +4343,13 @@ unix = {
     SHUT_WR = nil,
     ---@type integer
     SHUT_RDWR = nil,
+
+    --- @type table<string, integer> Every numbered signal constant, keyed by
+    --- its full name (e.g. `"SIGTERM"`), for a runtime name->number lookup.
+    --- Excludes the `SIG_*` sigprocmask()-`how` values and handler-pointer
+    --- sentinels below (`SIG_BLOCK`, `SIG_DFL`, ...): none of them are
+    --- signal numbers.
+    SIG = nil,
 
     --- @type integer Process aborted.
     SIGABRT = nil,
