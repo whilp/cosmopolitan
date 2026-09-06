@@ -27,10 +27,11 @@
 --     IP_/TCP_/SO_/CLOCK_ families), and
 --   * LuaSetNameValueTable(L, kTable, "FIELD") calls, which register FIELD
 --     itself as a single name->value map constant built from a plain C
---     NameValue[] array (the E/SIG families -- unix.E and unix.SIG, whose
---     entries are compile-time #define literals with no OS-resolved extern
---     symbol behind them, so they cannot use the LoadMagnums/MagnumStr
---     address-offset scheme the four families above depend on).
+--     NameValue[] array (the E/SIG/CAP families -- unix.E, unix.SIG and
+--     unix.CAP, whose entries are compile-time #define literals with no
+--     OS-resolved extern symbol behind them, so they cannot use the
+--     LoadMagnums/MagnumStr address-offset scheme the four families above
+--     depend on).
 --
 -- ALLOW_* below are the symbols that are knowingly not yet annotated. These
 -- lists are a RATCHET: they may only shrink. Adding a new binding without its
@@ -908,12 +909,13 @@ local QALLOW_BARE = set({
 
 -- Q5: every scalar constant declares `integer`; this allowlist is otherwise
 -- empty and must stay that way -- do not seed it, annotate the constant.
--- unix.E and unix.SIG are the one deliberate, permanent exception: each IS
--- a `table<string, integer>` name->value map, not a C int itself, so
--- declaring `integer` for either would be false.
+-- unix.E, unix.SIG and unix.CAP are the deliberate, permanent exceptions:
+-- each IS a `table<string, integer>` name->value map, not a C int itself,
+-- so declaring `integer` for any of them would be false.
 local QALLOW_CONSTTYPE = set({
   "unix.E",
   "unix.SIG",
+  "unix.CAP",
 })
 
 -- Q6: bindings whose declared success value genuinely IS a bare optional

@@ -442,7 +442,7 @@ assert(pv == -1 or (pv == nil and type(perr) == "string"),
 -- a lie, and the bit-op call sites that consume these are exactly where it
 -- would surface (whilp/cosmopolitan#142).
 --
--- unix.E and unix.SIG are the one exception: each reaches Lua through
+-- unix.E, unix.SIG and unix.CAP are the exception: each reaches Lua through
 -- LuaSetNameValueTable and is itself a `table<string, integer>` name->value
 -- map, not a scalar C int -- test_definitions_coverage.lua's Q5 allowlists
 -- them for the same reason (QALLOW_CONSTTYPE). Check every entry INSIDE the
@@ -467,6 +467,7 @@ local CONST_ABSENT = {
 local CONST_MAP = {
   ["unix.E"] = true,
   ["unix.SIG"] = true,
+  ["unix.CAP"] = true,
 }
 
 local nconst, nabsent = 0, 0
